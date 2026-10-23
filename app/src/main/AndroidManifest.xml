@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Search: find his contacts by name. Only asked for when he taps "allow access" in search. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Search commands "> timer 5m" and "> alarm 7:30": hand them to the phone's clock app. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+
     <!-- Lets us show Android's "Uninstall this app?" dialog from the app menu. -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
 
