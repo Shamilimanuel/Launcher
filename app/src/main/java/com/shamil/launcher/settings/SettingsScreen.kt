@@ -28,6 +28,7 @@ import com.shamil.launcher.ui.media.MusicSettingsContent
 import com.shamil.launcher.ui.media.MusicPreview
 import com.shamil.launcher.ui.clock.ClockStore
 import com.shamil.launcher.ui.home.HomeStyleStore
+import com.shamil.launcher.ui.theme.SavesStore
 import com.shamil.launcher.ui.widgets.WidgetStackSettingsContent
 import com.shamil.launcher.ui.widgets.AppWidgetPickerContent
 import com.shamil.launcher.ui.widgets.WidgetStore
@@ -123,7 +124,7 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
+private enum class Page { Top, Look, Saves, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -149,6 +150,7 @@ private class SettingHit(
 }
 
 private val SETTINGS_INDEX = listOf(
+    SettingHit("My saves", "Look", listOf(Page.Look, Page.Saves), R.drawable.ic_star, Geo, "save saves opslaan saved looks profile profiel preset wallpaper achtergrond"),
     SettingHit("Home style (bundles)", "Look", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_home_filled, Electro, "home style bundle bundles glass floating gold minimal spirit transparent see-through doorzichtig card kaart spacing edge"),
     SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
     SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
@@ -280,6 +282,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 Page.Look -> PageFrame("Serenitea", "Look", onBack = ::pop, preview = true) {
                     // The bundles: clock, date, the line under it and the widget card as one matching set.
                     val homeStyle = HomeStyleStore.get(LocalContext.current)
+                    GroupCard(R.drawable.ic_star, Geo, "My saves", SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Save your look, with its own wallpaper" else "$it saved looks" }) { push(Page.Saves) }
                     GroupCard(R.drawable.ic_home_filled, Electro, "Home style", homeStyle.bundle.title + if (homeStyle.isCustom) " · custom" else "") { push(Page.HomeStyle) }
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
@@ -309,6 +312,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     IconsPage(looks)
                 }
                 // The live preview stays pinned at the top while he scrolls through the controls (his ask, 23 Oct).
+                Page.Saves -> PageFrame("Look", "My saves", onBack = ::pop) {
+                    SavesSettingsContent()
+                }
                 Page.HomeStyle -> PageFrame("Look", "Home style", onBack = ::pop, pinned = { HomePreview() }) {
                     HomeStyleSettingsContent()
                 }

@@ -118,6 +118,11 @@ class MusicPrefs private constructor(context: Context) {
         idle = if (prefs.getBoolean("reserve_spot", true)) "keep" else "hide",
     )
 
+    /** Reads the card's style again from the phone (after a saved look was applied). */
+    fun reload() {
+        style = MusicStyle.fromJson(prefs.getString(KEY_STYLE, null), oldStyle())
+    }
+
     companion object {
         const val SIZE_LARGE = "large"
         const val SIZE_COMPACT = "compact"

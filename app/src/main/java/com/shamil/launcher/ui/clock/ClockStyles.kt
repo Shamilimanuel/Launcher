@@ -170,6 +170,13 @@ class ClockStore private constructor(context: Context) {
         prefs.edit { putString(KEY_GLANCE, style.id) }
     }
 
+    /** Reads the styles again from the phone (after a saved look was applied). */
+    fun reload() {
+        clockStyle = ClockStyle.byId(prefs.getString(KEY_CLOCK, null))
+        dateStyle = DateStyle.byId(prefs.getString(KEY_DATE, null))
+        glanceStyle = GlanceStyle.byId(prefs.getString(KEY_GLANCE, null))
+    }
+
     companion object {
         private const val KEY_CLOCK = "clock_style"
         private const val KEY_DATE = "date_style"

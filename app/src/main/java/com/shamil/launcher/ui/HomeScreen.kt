@@ -261,7 +261,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                             }
                         }
                         .verticalScroll(favouritesScroll)
-                        .padding(end = 56.dp, bottom = 32.dp)
+                        // Room at the bottom for the navigation buttons, so the last favourite never hides behind them.
+                        .padding(end = 56.dp, bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                 ) {
                     // The stats card sits at the top of the favourites and scrolls with them,
                     // so apps can't slide up behind it (his 23 Oct bug).

@@ -125,6 +125,11 @@ class StatsStore private constructor(context: Context) {
         StatsStyle()
     }
 
+    /** Reads the choices again from the phone (after a saved look was applied). */
+    fun reload() {
+        style = load()
+    }
+
     companion object {
         private const val KEY = "style"
         @Volatile private var instance: StatsStore? = null

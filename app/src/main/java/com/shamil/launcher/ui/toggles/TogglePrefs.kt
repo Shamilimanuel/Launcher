@@ -107,6 +107,11 @@ class TogglePrefs private constructor(context: Context) {
         ToggleSetup()
     }
 
+    /** Reads the setup again from the phone (after a saved look was applied). */
+    fun reload() {
+        setup = load()
+    }
+
     companion object {
         const val STYLE_ICONS = "icons"
         const val STYLE_PILLS = "pills"

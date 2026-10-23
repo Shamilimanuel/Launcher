@@ -169,6 +169,12 @@ class HomeStyleStore private constructor(context: Context) {
         prefs.edit { putString(KEY_BUNDLE, bundle.id); putString(KEY_STYLE, s.toJson()) }
     }
 
+    /** Reads the bundle and tweaks again from the phone (after a saved look was applied). */
+    fun reload() {
+        bundle = HomeBundle.byId(prefs.getString(KEY_BUNDLE, null))
+        style = HomeStyle.fromJson(prefs.getString(KEY_STYLE, null), bundle.style)
+    }
+
     companion object {
         private const val KEY_BUNDLE = "bundle"
         private const val KEY_STYLE = "style"

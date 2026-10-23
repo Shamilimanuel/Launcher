@@ -141,6 +141,17 @@ class LookStore private constructor(private val context: Context) {
         prefs.edit { putFloat(KEY_ICON_SCALE, scale) }
     }
 
+    /** Reads every choice again from the phone (after a saved look was applied). */
+    fun reload() {
+        themeId = prefs.getString(KEY_THEME, null) ?: Fuji.id
+        fontId = prefs.getString(KEY_FONT, null)
+        iconPack = prefs.getString(KEY_ICONS, null)
+        iconScale = prefs.getFloat(KEY_ICON_SCALE, 1f)
+        textColour = prefs.getString(KEY_TEXT, null)
+        colourParts = prefs.getStringSet(KEY_PARTS, null)?.toSet() ?: COLOUR_PARTS.map { it.first }.toSet()
+        railColour = prefs.getString(KEY_RAIL, "text") ?: "text"
+    }
+
     companion object {
         /** Saved as [iconPack] when he picks "Original icons". */
         const val NO_PACK = "none"
