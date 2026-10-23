@@ -68,7 +68,7 @@ object WeatherSource {
                 val url = URL(
                     "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
                         "&current=temperature_2m,weather_code,is_day" +
-                        "&hourly=temperature_2m,weather_code,is_day&forecast_hours=4&timezone=auto"
+                        "&hourly=temperature_2m,weather_code,is_day&forecast_hours=9&timezone=auto"
                 )
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 8000

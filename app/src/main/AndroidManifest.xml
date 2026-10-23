@@ -9,6 +9,8 @@
     <!-- Weather: download the forecast from Open-Meteo, using only a rough (~10 km) location. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Stats card: the Wi-Fi signal strength (a normal permission, no question to him). -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Search: find his contacts by name. Only asked for when he taps "allow access" in search. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />

@@ -142,8 +142,8 @@ fun ColumnScope.HomeStyleSettingsContent() {
 }
 
 private val COLOURS = listOf("white" to "White", "accent" to "Accent", "gold" to "Gold")
-private val ON_OFF = listOf("off" to "Off", "on" to "On")
-private fun Boolean.onOff() = if (this) "on" else "off"
+internal val ON_OFF = listOf("off" to "Off", "on" to "On")
+internal fun Boolean.onOff() = if (this) "on" else "off"
 private fun nearestWeight(w: Int) = listOf(300, 600, 800).minBy { kotlin.math.abs(it - w) }.toString()
 
 /**
@@ -305,7 +305,7 @@ private fun RowScope.DateTile(title: String, selected: Boolean, onClick: () -> U
 
 /** A row of choices: the label, then pill buttons; the picked one is filled with the accent. */
 @Composable
-private fun Choice(label: String, options: List<Pair<String, String>>, selected: String, enabled: Boolean = true, onPick: (String) -> Unit) {
+internal fun Choice(label: String, options: List<Pair<String, String>>, selected: String, enabled: Boolean = true, onPick: (String) -> Unit) {
     val look = LocalLauncherLook.current
     Column(Modifier.staggerIn().padding(bottom = 12.dp).then(if (enabled) Modifier else Modifier.background(Color.Transparent))) {
         Text(label, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
@@ -348,7 +348,7 @@ private fun Choice(label: String, options: List<Pair<String, String>>, selected:
 
 /** A slider with its label and value ("47 sp"). */
 @Composable
-private fun Slide(label: String, value: Float, range: ClosedFloatingPointRange<Float>, steps: Int, unit: String, enabled: Boolean = true, onChange: (Float) -> Unit) {
+internal fun Slide(label: String, value: Float, range: ClosedFloatingPointRange<Float>, steps: Int, unit: String, enabled: Boolean = true, onChange: (Float) -> Unit) {
     val look = LocalLauncherLook.current
     Column(Modifier.staggerIn().padding(start = 4.dp, end = 4.dp, bottom = 6.dp)) {
         Row {

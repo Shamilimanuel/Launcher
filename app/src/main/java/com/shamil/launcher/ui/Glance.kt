@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.shamil.launcher.R
 import com.shamil.launcher.ui.home.GlanceLook
+import com.shamil.launcher.ui.home.StatsCard
 import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.home.glanceLook
 import com.shamil.launcher.ui.home.homeChip
@@ -173,53 +174,15 @@ fun GlanceCard(state: GlanceState, modifier: Modifier = Modifier) {
     AnimatedVisibility(state.open, modifier, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
         // Swallow taps on the card itself, so only a tap AWAY from it closes it.
         Box(Modifier.clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}) {
-            StatsCard(state.weather, state.stats)
-        }
-    }
-}
-
-@Composable
-private fun StatsCard(weather: Weather?, stats: DeviceStats) {
-    val look = LocalLauncherLook.current
-    Column(
-        Modifier
-            .padding(top = 6.dp, end = 8.dp, bottom = 10.dp)
-            .fillMaxWidth()
-            .background(look.panel, RoundedCornerShape(22.dp))
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-    ) {
-        if (weather != null) {
+            // The customisable stats card (Seelie settings → Home screen → Stats card); its card matches his home style.
             val context = LocalContext.current
-            Row(
-                // Tap the weather = open his own weather app (Android keeps its data private, so we can't read it).
-                Modifier.fillMaxWidth().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                    openWeatherApp(context)
-                },
-                horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column {
-                    CardText("${weather.temp}°", 32.sp, look.text, FontWeight.Medium)
-                    CardText(weather.description, 13.sp, look.textDim)
-                }
-                weather.hours.forEach { hour ->
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CardText(hour.hour, 12.sp, look.textDim)
-                        Icon(painterResource(hour.icon), contentDescription = null, tint = look.text, modifier = Modifier.size(22.dp))
-                        CardText("${hour.temp}°", 14.sp, look.text)
-                    }
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-            Ring("Battery", stats.batteryPercent, if (stats.charging) "Charging" else null)
-            Ring("Memory", stats.memoryUsedPercent, "in use")
-            Ring("Storage", stats.storageUsedPercent, "${stats.storageFreeGb} GB free")
+            StatsCard(state.weather, state.stats, Modifier.padding(top = 6.dp, end = 8.dp, bottom = 10.dp), onWeatherTap = { openWeatherApp(context) })
         }
     }
 }
 
 /** Opens the first installed app with "weather" (or Dutch "weer") in its name or package. Does nothing if there's none. */
-private fun openWeatherApp(context: Context) {
+internal fun openWeatherApp(context: Context) {
     val pm = context.packageManager
     val launchable = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
     val app = launchable.firstOrNull { info ->
@@ -230,35 +193,6 @@ private fun openWeatherApp(context: Context) {
         .setClassName(app.activityInfo.packageName, app.activityInfo.name)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     runCatching { context.startActivity(intent) }
-}
-
-/** A round gauge: a faint full circle with the filled part in the accent colour, the % in the middle. */
-@Composable
-private fun Ring(label: String, percent: Int, sub: String?) {
-    val look = LocalLauncherLook.current
-    // The ring glides to its new value (and fills up from empty when the card opens), so the live updates feel alive.
-    var shown by remember { mutableStateOf(0) }
-    LaunchedEffect(percent) { shown = percent }
-    val fill by animateFloatAsState(shown.coerceIn(0, 100) / 100f, tween(700), label = "ring")
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .size(58.dp)
-                .drawBehind {
-                    val stroke = 5.dp.toPx()
-                    val arcSize = Size(size.width - stroke, size.height - stroke)
-                    val topLeft = Offset(stroke / 2, stroke / 2)
-                    drawArc(look.text.copy(alpha = 0.18f), -90f, 360f, false, topLeft, arcSize, style = Stroke(stroke))
-                    drawArc(look.accent, -90f, 360f * fill, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            CardText("$percent%", 14.sp, look.text, FontWeight.Bold)
-        }
-        Spacer(Modifier.height(6.dp))
-        CardText(label, 13.sp, look.text)
-        if (sub != null) CardText(sub, 11.sp, look.textDim)
-    }
 }
 
 @Composable
