@@ -216,6 +216,7 @@ private val START_PAGES = mapOf(
 
 /** One line under each theme's name, from the prototype. */
 private val TAGLINES = mapOf(
+    "wallpaper" to "Colours from your own wallpaper, updates when it changes",
     "night" to "The house look",
     "fuji" to "Dusk, sakura, your wallpaper",
     "inazuma" to "Storm light, electro purple",
@@ -250,7 +251,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
             },
             label = "settings page",
         ) { pages ->
-            val current = themeById(looks.themeId)
+            val current = looks.currentTheme
             val fontName = looks.fontId?.let { id -> SeelieFonts.firstOrNull { it.id == id }?.name } ?: "Theme font"
             when (pages.last()) {
                 Page.Top -> PageFrame("Serenitea", "Seelie settings", onBack = ::pop) {
@@ -287,7 +288,8 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 }
                 Page.Themes -> PageFrame("Look", "Themes", onBack = ::pop, preview = true) {
                     Hint("A theme sets the colours and font of all of Seelie. Tap one and the preview changes. Backgrounds, icons and clocks per theme come later.")
-                    SeelieThemes.chunked(2).forEach { pair ->
+                    // First: "Match my wallpaper" (colours from his own wallpaper), then the built-in themes.
+                    (listOfNotNull(looks.wallpaperLook) + SeelieThemes).chunked(2).forEach { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
                             pair.forEach { theme ->
                                 ThemeTile(theme, selected = theme.id == looks.themeId) { looks.setTheme(theme.id) }

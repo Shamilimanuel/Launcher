@@ -418,7 +418,7 @@ internal fun TextColourSettings(looks: com.shamil.launcher.ui.theme.LookStore) {
     SectionLabel("Text colour")
     Row(Modifier.staggerIn().fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         // First: the theme's own text colour, then every colour he can pick.
-        val options = listOf<Pair<String?, Color>>(null to com.shamil.launcher.ui.theme.themeById(looks.themeId).text) +
+        val options = listOf<Pair<String?, Color>>(null to looks.currentTheme.text) +
             com.shamil.launcher.ui.theme.LookStore.TEXT_COLOURS.map { (id, c) -> id to (if (c == Color.Unspecified) look.accent else c) }
         options.forEach { (id, colour) ->
             val on = looks.textColour == id

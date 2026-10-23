@@ -61,6 +61,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Re-check every time we come to the front, e.g. after changing the Home app in Settings.
         isDefault = DefaultHome.isDefault(this)
+        // His wallpaper may have changed while he was away ("Match my wallpaper" theme).
+        looks.refreshWallpaper()
     }
 
     /** Android calls this when Home is pressed while we're already open: go back to the favourites. */

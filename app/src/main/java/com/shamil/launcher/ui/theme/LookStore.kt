@@ -1,6 +1,10 @@
 package com.shamil.launcher.ui.theme
 
 import android.content.Context
+import android.app.WallpaperManager
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -15,8 +19,33 @@ import com.shamil.launcher.apps.SeelieIcons
  * All are Compose state: change one and every screen redraws in the new look straight away.
  * There's ONE store for the whole app ([get]), so a pick in Seelie settings shows on the home screen too.
  */
-class LookStore private constructor(context: Context) {
+class LookStore private constructor(private val context: Context) {
     private val prefs = context.getSharedPreferences("look", Context.MODE_PRIVATE)
+
+    /** The "Match my wallpaper" theme, rebuilt whenever his wallpaper changes (null if Android can't tell its colours). */
+    var wallpaperLook by mutableStateOf(WallpaperTheme.build(context))
+        private set
+
+    init {
+        // A new wallpaper = new colours: Android tells us, and the theme glides to them.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            runCatching {
+                WallpaperManager.getInstance(context).addOnColorsChangedListener(
+                    { _, which -> if (which and WallpaperManager.FLAG_SYSTEM != 0) refreshWallpaper() },
+                    Handler(Looper.getMainLooper()),
+                )
+            }
+        }
+    }
+
+    /** Reads the wallpaper's colours again (also called when the home comes back, in case we missed a change). */
+    fun refreshWallpaper() {
+        wallpaperLook = WallpaperTheme.build(context)
+    }
+
+    /** The picked theme as a look ("wallpaper" = his wallpaper's colours, falling back to Fuji). */
+    val currentTheme: LauncherLook
+        get() = if (themeId == WallpaperTheme.ID) wallpaperLook ?: Fuji else themeById(themeId)
 
     var themeId by mutableStateOf(prefs.getString(KEY_THEME, null) ?: Fuji.id)
         private set
@@ -49,7 +78,7 @@ class LookStore private constructor(context: Context) {
     /** The look to show: the theme, with his font, icon size and text colours swapped in. */
     val look: LauncherLook
         get() {
-            val theme = themeById(themeId)
+            val theme = currentTheme
             val withFont = fontId?.let { theme.copy(font = fontById(it)) } ?: theme
             val base = withFont.copy(iconScale = iconScale)
             val text = TEXT_COLOURS[textColour]?.let { if (it == Color.Unspecified) base.accent else it }
