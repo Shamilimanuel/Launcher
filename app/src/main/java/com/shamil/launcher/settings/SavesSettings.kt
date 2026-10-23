@@ -75,6 +75,7 @@ fun ColumnScope.SavesSettingsContent(
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<SavedLook?>(null) }
     var pickingFor by remember { mutableStateOf<SavedLook?>(null) }
+    var previewing by remember { mutableStateOf<Int?>(null) }        // the Niagara-style preview, open at this save
     // The photo picker: no permission needed, he picks one picture.
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val save = pickingFor ?: return@rememberLauncherForActivityResult
@@ -90,17 +91,19 @@ fun ColumnScope.SavesSettingsContent(
 
     if (intro) SectionLabel(if (store.saves.isEmpty()) "No saves yet" else "Your themes · ${store.saves.size}")
     else if (store.saves.isEmpty()) Hint("Nothing saved yet. Your saved looks show up here, the way Niagara's \"your themes\" do.")
-    store.saves.forEach { save ->
+    val applySave: (SavedLook) -> Unit = { save ->
+        scope.launch {
+            withContext(Dispatchers.IO) { store.apply(save) }
+            store.reloadStores()
+            Toast.makeText(context, "\"${save.name}\" applied", Toast.LENGTH_SHORT).show()
+        }
+    }
+    store.saves.forEachIndexed { index, save ->
         SaveCard(
             save = save,
             store = store,
-            onApply = {
-                scope.launch {
-                    withContext(Dispatchers.IO) { store.apply(save) }
-                    store.reloadStores()
-                    Toast.makeText(context, "\"${save.name}\" applied", Toast.LENGTH_SHORT).show()
-                }
-            },
+            onApply = { applySave(save) },
+            onPreview = { previewing = index },
             onUpdate = {
                 store.update(save)
                 Toast.makeText(context, "\"${save.name}\" now holds your current look", Toast.LENGTH_SHORT).show()
@@ -115,6 +118,9 @@ fun ColumnScope.SavesSettingsContent(
         )
     }
 
+    previewing?.let { start ->
+        ThemePreviewDialog(store.saves, start, onApply = { save -> previewing = null; applySave(save) }, onDismiss = { previewing = null })
+    }
     if (creating) NameDialog("Name this look", "My look ${store.saves.size + 1}", onDone = { name ->
         creating = false
         if (name != null) {
@@ -144,7 +150,7 @@ fun ColumnScope.SavesSettingsContent(
 @Composable
 private fun SaveCard(
     save: SavedLook, store: SavesStore,
-    onApply: () -> Unit, onUpdate: () -> Unit, onWallpaper: () -> Unit, onRemoveWallpaper: () -> Unit,
+    onApply: () -> Unit, onPreview: () -> Unit, onUpdate: () -> Unit, onWallpaper: () -> Unit, onRemoveWallpaper: () -> Unit,
     onRename: () -> Unit, onDelete: () -> Unit,
 ) {
     val look = LocalLauncherLook.current
@@ -166,14 +172,15 @@ private fun SaveCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 Modifier.size(width = 56.dp, height = 96.dp).clip(RoundedCornerShape(12.dp))
-                    .background(Brush.verticalGradient(listOf(Color(save.sheet), Color(save.accent).copy(alpha = 0.6f)))),
+                    .background(Brush.verticalGradient(listOf(Color(save.sheet), Color(save.accent).copy(alpha = 0.6f))))
+                    .clickable(onClick = onPreview),
                 contentAlignment = Alignment.Center,
             ) {
                 thumb?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 56.dp, height = 96.dp)) }
                 if (thumb == null) Box(Modifier.size(18.dp).background(Color(save.accent), CircleShape))
             }
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).clickable(remember { MutableInteractionSource() }, null, onClick = onPreview)) {
                 Text(save.name, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.text, fontSize = 18.sp))
                 Text(save.themeName + if (hasWallpaper) " · with wallpaper" else "", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
                 Spacer(Modifier.height(8.dp))
@@ -182,6 +189,7 @@ private fun SaveCard(
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SmallChip("Preview", onPreview, colour = look.accent)
             SmallChip(if (hasWallpaper) "Change wallpaper" else "Add wallpaper", onWallpaper)
             if (hasWallpaper) SmallChip("No wallpaper", onRemoveWallpaper)
             SmallChip("Update to current", onUpdate)
