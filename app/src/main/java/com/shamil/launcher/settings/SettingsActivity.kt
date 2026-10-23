@@ -38,7 +38,7 @@ class SettingsActivity : ComponentActivity(), WidgetSetupResults {
         val looks = LookStore.get(this)
         setContent {
             LauncherTheme(look = animatedLook(looks.look)) {
-                SettingsApp(looks = looks, onClose = ::finish)
+                SettingsApp(looks = looks, startAt = intent.getStringExtra(SeelieSettings.EXTRA_PAGE), onClose = ::finish)
             }
         }
     }

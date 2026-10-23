@@ -218,7 +218,7 @@ private fun Header(app: AppEntry, isSystem: Boolean) {
 
 /** A small accent-coloured heading over a group of cards, with a hairline running to the right. */
 @Composable
-private fun GroupLabel(text: String) {
+internal fun GroupLabel(text: String) {
     val look = LocalLauncherLook.current
     Row(Modifier.padding(start = 6.dp, top = 20.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text.uppercase(), style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent,
@@ -254,7 +254,7 @@ private fun RowScope.Tile(@DrawableRes icon: Int, title: String, sub: String, on
 
 /** A full-width rounded card: icon, title and an optional small line under it. */
 @Composable
-private fun Card(@DrawableRes icon: Int, title: String, sub: String?, color: Color? = null, onClick: () -> Unit) {
+internal fun Card(@DrawableRes icon: Int, title: String, sub: String?, color: Color? = null, onClick: () -> Unit) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(18.dp)
     Row(

@@ -197,6 +197,13 @@ private fun SettingsSearch(query: String, onQuery: (String) -> Unit) {
     }
 }
 
+/** Pages other screens can open settings on, by name ([SeelieSettings.open] with a page). */
+private val START_PAGES = mapOf(
+    SeelieSettings.PAGE_CLOCK to listOf(Page.Look, Page.Clock),
+    SeelieSettings.PAGE_WIDGETS to listOf(Page.Home, Page.Widgets),
+    SeelieSettings.PAGE_WIDGET_PICKER to listOf(Page.Home, Page.Widgets, Page.WidgetPicker),
+)
+
 /** One line under each theme's name, from the prototype. */
 private val TAGLINES = mapOf(
     "night" to "The house look",
@@ -206,10 +213,11 @@ private val TAGLINES = mapOf(
 )
 
 @Composable
-fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
+fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) {
     val look = LocalLauncherLook.current
     // Where you are: a stack of pages, so Back steps out one page at a time.
-    var stack by remember { mutableStateOf(listOf(Page.Top)) }
+    // [startAt] opens straight on a page (e.g. from the home's "Seelie widget" sheet); Back still steps out page by page.
+    var stack by remember { mutableStateOf(listOf(Page.Top) + (START_PAGES[startAt] ?: emptyList())) }
     fun push(page: Page) { stack = stack + page }
     // Search on the top page: type a word, tap a result to jump straight to its page.
     var query by remember { mutableStateOf("") }

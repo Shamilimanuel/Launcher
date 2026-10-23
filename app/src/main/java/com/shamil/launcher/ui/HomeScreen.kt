@@ -20,6 +20,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -116,6 +120,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     val favourites = rememberFavourites()
     val tweaks = rememberAppTweaks()
     val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
 
     // His renames applied, then re-sorted so a renamed app lands under its new letter.
     val apps = remember(installed, tweaks.names) {
@@ -153,6 +158,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The app whose menu is open (long-press), or null.
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    // The "Seelie widget" sheet (long-press beside the clock).
+    var widgetSheet by remember { mutableStateOf(false) }
     val openMenu = { app: AppEntry -> menuApp = app }
 
     // Slide-to-open: where the thumb is while it slides off the rail onto the list, and the app under it.
@@ -180,8 +187,21 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     }
             ) {
                 Spacer(Modifier.height(screenH * 0.105f))
-                ClockAndDate(Modifier.padding(start = 48.dp))
-                Glance(glance, Modifier.padding(start = 48.dp))
+                // The clock area, the full width of the screen: holding the empty space right of the clock
+                // opens the "Seelie widget" sheet, like Niagara's.
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            detectTapGestures(onLongPress = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                widgetSheet = true
+                            })
+                        }
+                ) {
+                    ClockAndDate(Modifier.padding(start = 48.dp), onLongPress = { widgetSheet = true })
+                    Glance(glance, Modifier.padding(start = 48.dp))
+                }
                 if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
                 Spacer(Modifier.height(12.dp))
                 Column(
@@ -287,6 +307,16 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         }
     }
 
+    if (widgetSheet) {
+        HomeWidgetSheet(
+            onEditFavourites = {
+                onListLetter(null)
+                state.editingFavourites = true
+            },
+            onDismiss = { widgetSheet = false },
+        )
+    }
+
     menuApp?.let { app ->
         val pkg = app.component.packageName
         AppMenuSheet(
@@ -330,7 +360,7 @@ private fun KeepAliveFade(visible: Boolean, content: @Composable () -> Unit) {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ClockAndDate(modifier: Modifier = Modifier) {
+private fun ClockAndDate(modifier: Modifier = Modifier, onLongPress: () -> Unit = {}) {
     val context = LocalContext.current
     val now = rememberNow()
     // The clock and date in the styles he picked (Seelie settings → Look → Clock & date). Tap the clock = clock app,
@@ -339,7 +369,8 @@ private fun ClockAndDate(modifier: Modifier = Modifier) {
         time = now,
         is24h = DateFormat.is24HourFormat(context),
         onClockClick = { openSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
-        onClockLongClick = { openSafely(context, DefaultHome.settingsIntent()) },
+        // Holding the clock opens the Seelie widget sheet too ("Switch Home app" is in there, the old escape hatch).
+        onClockLongClick = onLongPress,
         onDateClick = {
             val today = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
             ContentUris.appendId(today, System.currentTimeMillis())

@@ -113,6 +113,8 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
     }
     // The glance style he picked (Seelie settings → Look → Clock & date): plain, pill, glow or icons only.
     val glanceStyle = remember { ClockStore.get(context) }.glanceStyle
+    // What the line shows: both can be switched off in the "Seelie widget" sheet (long-press beside the clock).
+    val home = remember { HomePrefs.get(context) }
     Row(
         modifier
             .glanceFrame(glanceStyle)
@@ -121,11 +123,11 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val w = state.weather
-        when {
+        if (home.showWeather) when {
             w != null -> {
                 GlanceIcon(w.icon)
                 GlanceText(if (glanceStyle.showsWords) "${w.temp}° ${w.description}" else "${w.temp}°")
-                GlanceDot()
+                if (home.showBattery) GlanceDot()
             }
             !state.hasPermission -> {
                 GlanceIcon(R.drawable.ic_cloud)
@@ -133,7 +135,7 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
                     "Tap for weather",
                     Modifier.clickable { askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION) },
                 )
-                GlanceDot()
+                if (home.showBattery) GlanceDot()
             }
             // Allowed, but no weather yet: say why instead of showing nothing (his 23 Oct bug).
             !state.locationOn -> {
@@ -142,16 +144,18 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
                     "Location off",
                     Modifier.clickable { context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
                 )
-                GlanceDot()
+                if (home.showBattery) GlanceDot()
             }
             else -> {
                 GlanceIcon(R.drawable.ic_cloud)
                 GlanceText("Weather…")
-                GlanceDot()
+                if (home.showBattery) GlanceDot()
             }
         }
-        GlanceIcon(if (state.stats.charging) R.drawable.ic_bolt else R.drawable.ic_battery_full)
-        GlanceText("${state.stats.batteryPercent}%")
+        if (home.showBattery) {
+            GlanceIcon(if (state.stats.charging) R.drawable.ic_bolt else R.drawable.ic_battery_full)
+            GlanceText("${state.stats.batteryPercent}%")
+        }
     }
 }
 
