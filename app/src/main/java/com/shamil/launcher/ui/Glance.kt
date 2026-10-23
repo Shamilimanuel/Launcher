@@ -53,6 +53,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.shamil.launcher.R
+import com.shamil.launcher.ui.clock.ClockStore
+import com.shamil.launcher.ui.clock.glanceFrame
 import com.shamil.launcher.glance.DeviceStats
 import com.shamil.launcher.glance.Weather
 import com.shamil.launcher.glance.WeatherSource
@@ -109,8 +111,11 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         state.hasPermission = granted
     }
+    // The glance style he picked (Seelie settings → Look → Clock & date): plain, pill, glow or icons only.
+    val glanceStyle = remember { ClockStore.get(context) }.glanceStyle
     Row(
         modifier
+            .glanceFrame(glanceStyle)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.open = !state.open }
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -119,7 +124,7 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
         when {
             w != null -> {
                 GlanceIcon(w.icon)
-                GlanceText("${w.temp}° ${w.description}")
+                GlanceText(if (glanceStyle.showsWords) "${w.temp}° ${w.description}" else "${w.temp}°")
                 GlanceDot()
             }
             !state.hasPermission -> {
