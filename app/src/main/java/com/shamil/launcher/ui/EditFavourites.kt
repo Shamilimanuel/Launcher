@@ -8,6 +8,12 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import com.shamil.launcher.apps.Apps
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -104,11 +110,15 @@ fun EditFavouritesScreen(
     LaunchedEffect(favouriteApps) { if (dragging == null) order = favouriteApps }
     val picked = remember(favouriteApps) { favouriteApps.map { it.key }.toSet() }
     val sections = remember(apps) { apps.groupBy { it.letter } }
+    // Search, like Niagara's: while there's text, the A–Z part shows only the matching apps.
+    var query by remember { mutableStateOf("") }
+    val results = remember(apps, query) { if (query.isBlank()) emptyList() else Apps.search(apps, query) }
+    val searching = query.isNotBlank()
 
     // Where each letter's header sits in the list, for the rail. Items: title, Selected header, the favourites,
     // (Suggested header + suggestions), then per letter a header + its apps.
     val letterIndex = remember(order.size, suggestions, sections) {
-        var i = 2 + order.size + if (suggestions.isNotEmpty()) 1 + suggestions.size else 0
+        var i = 3 + order.size + if (suggestions.isNotEmpty()) 1 + suggestions.size else 0
         sections.mapValues { (_, group) -> i.also { i += 1 + group.size } }
     }
 
@@ -122,7 +132,8 @@ fun EditFavouritesScreen(
         CompositionLocalProvider(LocalStagger provides remember { Stagger() }) {
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                // The keyboard pushes the list up instead of covering the results.
+                modifier = Modifier.fillMaxSize().imePadding(),
                 contentPadding = PaddingValues(
                     top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 28.dp,
                     bottom = 140.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
@@ -130,6 +141,15 @@ fun EditFavouritesScreen(
                 ),
             ) {
                 item(key = "title") { EditTitle(count = order.size) }
+                item(key = "search") { EditSearch(query, onQuery = { query = it }) }
+
+                if (searching) {
+                    // Searching: just the matches, right under the box; tick them like anywhere else.
+                    item(key = "h-results") { EditSection(if (results.isEmpty()) "No apps match" else "Results · ${results.size}") }
+                    items(results, key = { "res-${it.key}" }) { app ->
+                        EditRow(app, checked = app.key in picked, modifier = Modifier.animateItem(), onClick = { onToggle(app) })
+                    }
+                }
 
                 item(key = "h-selected") { EditSection("Selected · ${order.size}") }
                 items(order, key = { "sel-${it.key}" }) { app ->
@@ -175,14 +195,14 @@ fun EditFavouritesScreen(
                     )
                 }
 
-                if (suggestions.isNotEmpty()) {
+                if (suggestions.isNotEmpty() && !searching) {
                     item(key = "h-suggested") { EditSection("Suggested") }
                     items(suggestions, key = { "sug-${it.key}" }) { app ->
                         EditRow(app, checked = false, modifier = Modifier.animateItem(), onClick = { onToggle(app) })
                     }
                 }
 
-                sections.forEach { (letter, group) ->
+                if (!searching) sections.forEach { (letter, group) ->
                     item(key = "h-$letter") { EditSection(letter, big = true) }
                     items(group, key = { "all-${it.key}" }) { app ->
                         EditRow(app, checked = app.key in picked, modifier = Modifier.animateItem(), onClick = { onToggle(app) })
@@ -228,6 +248,48 @@ private fun EditTitle(count: Int) {
             "$count picked · most people pick 4 to 8. Tap an app to add or remove it, drag ⠿ to change the order.",
             style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp, lineHeight = 20.sp),
         )
+    }
+}
+
+/** The search pill under the title: a magnifier, the text, and an ✕ to clear it. */
+@Composable
+private fun EditSearch(query: String, onQuery: (String) -> Unit) {
+    val look = LocalLauncherLook.current
+    val shape = CircleShape
+    Row(
+        Modifier
+            .staggerIn()
+            .padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 4.dp)
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(shape)
+            .background(look.card)
+            .border(1.dp, if (query.isNotEmpty()) look.accent.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.08f), shape)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(R.drawable.ic_search), contentDescription = null, tint = look.textDim, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) Text("Search apps", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 17.sp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQuery,
+                singleLine = true,
+                textStyle = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp),
+                cursorBrush = SolidColor(look.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (query.isNotEmpty()) {
+            Box(
+                Modifier.size(36.dp).clip(CircleShape).clickable { onQuery("") },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("✕", style = TextStyle(color = look.textDim, fontSize = 16.sp))
+            }
+        }
     }
 }
 

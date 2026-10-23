@@ -6,6 +6,10 @@ import android.content.pm.LauncherApps
 import android.os.Process
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.runtime.produceState
@@ -125,6 +129,74 @@ internal val Dendro = Color(0xFFA5C83B)
 internal val Cryo = Color(0xFF9FD6E3)
 internal val Geo = Color(0xFFF0B232)
 
+/**
+ * Everything the settings search can find: a name, where it lives, the pages to open, and extra words
+ * (English and Dutch, since his phone is Dutch) that should also find it.
+ */
+private class SettingHit(
+    val title: String, val where: String, val path: List<Page>,
+    @DrawableRes val icon: Int, val tint: Color, val words: String,
+) {
+    fun matches(query: String): Boolean {
+        val q = query.trim().lowercase()
+        return title.lowercase().contains(q) || where.lowercase().contains(q) || words.split(' ').any { it.startsWith(q) || q in it }
+    }
+}
+
+private val SETTINGS_INDEX = listOf(
+    SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
+    SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
+    SettingHit("Icon pack and style", "Look", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "icons iconen pack darko themed glass pictogram"),
+    SettingHit("Icon size", "Look · Icons", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "size grootte bigger smaller groter kleiner"),
+    SettingHit("Clock style", "Look · Clock & date", listOf(Page.Look, Page.Clock), R.drawable.ic_schedule, Geo, "clock klok time tijd neon words woorden colon gold"),
+    SettingHit("Date style", "Look · Clock & date", listOf(Page.Look, Page.Clock), R.drawable.ic_schedule, Geo, "date datum day dag stamp pill capitals"),
+    SettingHit("Glance line style", "Look · Clock & date", listOf(Page.Look, Page.Clock), R.drawable.ic_sunny, Geo, "glance weather weer battery batterij line regel glow pill"),
+    SettingHit("Widget stack", "Home screen", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "widget widgets stack calendar kalender month maand gauges notes notities week"),
+    SettingHit("Add a widget from an app", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets, Page.WidgetPicker), R.drawable.ic_widgets, Pyro, "app widget toevoegen add spotify agenda"),
+    SettingHit("Widget card style", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "card kaart glass solid outline"),
+    SettingHit("Search & commands", "Seelie settings", listOf(Page.Search), R.drawable.ic_search, Hydro, "search zoeken engine zoekmachine duckduckgo google contacts contacten calculator rekenmachine commands timer torch zaklamp"),
+    SettingHit("Default home app", "Seelie", listOf(Page.Seelie), R.drawable.ic_home, Geo, "home launcher default standaard startscherm niagara switch"),
+    SettingHit("Version", "Seelie", listOf(Page.Seelie), R.drawable.ic_settings, Geo, "version versie about over"),
+)
+
+/** The search pill at the top of Seelie settings. */
+@Composable
+private fun SettingsSearch(query: String, onQuery: (String) -> Unit) {
+    val look = LocalLauncherLook.current
+    Row(
+        Modifier
+            .staggerIn()
+            .padding(bottom = 14.dp)
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(CircleShape)
+            .background(look.card)
+            .border(1.dp, if (query.isNotEmpty()) look.accent.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.08f), CircleShape)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(R.drawable.ic_search), contentDescription = null, tint = look.textDim, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) Text("Search all settings", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 17.sp))
+            BasicTextField(
+                value = query,
+                onValueChange = onQuery,
+                singleLine = true,
+                textStyle = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp),
+                cursorBrush = SolidColor(look.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (query.isNotEmpty()) {
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable { onQuery("") }, contentAlignment = Alignment.Center) {
+                Text("✕", style = TextStyle(color = look.textDim, fontSize = 16.sp))
+            }
+        }
+    }
+}
+
 /** One line under each theme's name, from the prototype. */
 private val TAGLINES = mapOf(
     "night" to "The house look",
@@ -139,6 +211,8 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
     // Where you are: a stack of pages, so Back steps out one page at a time.
     var stack by remember { mutableStateOf(listOf(Page.Top)) }
     fun push(page: Page) { stack = stack + page }
+    // Search on the top page: type a word, tap a result to jump straight to its page.
+    var query by remember { mutableStateOf("") }
     fun pop() { if (stack.size > 1) stack = stack.dropLast(1) else onClose() }
     BackHandler(enabled = stack.size > 1) { pop() }
 
@@ -162,6 +236,19 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
             val fontName = looks.fontId?.let { id -> SeelieFonts.firstOrNull { it.id == id }?.name } ?: "Theme font"
             when (pages.last()) {
                 Page.Top -> PageFrame("Serenitea", "Seelie settings", onBack = ::pop) {
+                    SettingsSearch(query) { query = it }
+                    if (query.isNotBlank()) {
+                        val hits = SETTINGS_INDEX.filter { it.matches(query) }
+                        SectionLabel(if (hits.isEmpty()) "Nothing found" else "Results")
+                        if (hits.isEmpty()) Hint("Try another word, like theme, font, clock, widget or icon.")
+                        hits.forEach { hit ->
+                            GroupCard(hit.icon, hit.tint, hit.title, hit.where) {
+                                query = ""
+                                stack = listOf(Page.Top) + hit.path
+                            }
+                        }
+                        return@PageFrame
+                    }
                     HeroLook(summary = "${current.name} · $fontName") { push(Page.Look) }
                     SectionLabel("Settings")
                     GroupCard(R.drawable.ic_home, Pyro, "Home screen", "Widget stack, glance & weather, music card") { push(Page.Home) }
