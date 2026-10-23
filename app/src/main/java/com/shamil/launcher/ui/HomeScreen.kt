@@ -227,24 +227,6 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                         glance.open = false
                     }
             ) {
-                Spacer(Modifier.height(screenH * 0.105f))
-                // The clock area, the full width of the screen: holding the empty space right of the clock
-                // opens the "Seelie widget" sheet, like Niagara's.
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .pointerInput(Unit) {
-                            detectTapGestures(onLongPress = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                widgetSheet = true
-                            })
-                        }
-                ) {
-                    // Clock, date and glance line in his home style (Look → Home style), on one left edge.
-                    ClockAndDate(glance, onLongPress = { widgetSheet = true })
-                }
-                if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
-                Spacer(Modifier.height(12.dp))
                 Column(
                     Modifier
                         .weight(1f)
@@ -262,8 +244,28 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                         }
                         .verticalScroll(favouritesScroll)
                         // Room at the bottom for the navigation buttons, so the last favourite never hides behind them.
-                        .padding(end = 56.dp, bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .padding(bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                 ) {
+                    // The clock, date and glance line scroll away with the favourites too, like Niagara (his 23 Oct ask).
+                    Spacer(Modifier.height(screenH * 0.105f))
+                    // The clock area, the full width of the screen: holding the empty space right of the clock
+                    // opens the "Seelie widget" sheet, like Niagara's.
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .pointerInput(Unit) {
+                                detectTapGestures(onLongPress = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    widgetSheet = true
+                                })
+                            }
+                    ) {
+                        // Clock, date and glance line in his home style (Look → Home style), on one left edge.
+                        ClockAndDate(glance, onLongPress = { widgetSheet = true })
+                    }
+                    if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
+                    Spacer(Modifier.height(12.dp))
+                  Column(Modifier.padding(end = 56.dp)) {
                     // The stats card sits at the top of the favourites and scrolls with them,
                     // so apps can't slide up behind it (his 23 Oct bug).
                     GlanceCard(glance, Modifier.padding(start = 48.dp))
@@ -286,6 +288,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                         }
                         if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                     }
+                  }
                 }
             }
         }
