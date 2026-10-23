@@ -12,6 +12,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -77,6 +78,8 @@ class NowPlaying internal constructor(
     val canSkipNext: Boolean,
     val canSkipPrevious: Boolean,
     val canSeek: Boolean,
+    /** Extra buttons the app offers (Spotify's heart, shuffle, …), shuffle first when the app supports it. */
+    val extras: List<MediaExtra>,
     private val controller: MediaController,
 ) {
     // "Transport controls" = the remote control Android hands us for that app's player.
@@ -112,6 +115,31 @@ class NowPlaying internal constructor(
 }
 
 /**
+ * One extra button from the music app: a "custom action" (its own icon from the app, e.g. ♥ like or + add),
+ * or the standard shuffle. [isOn] lights it up (only known for shuffle, see below).
+ */
+class MediaExtra internal constructor(
+    val label: String,
+    /** The app's own icon; null = draw Seelie's own (the shuffle arrows, or a small star). */
+    val icon: ImageBitmap?,
+    val isShuffle: Boolean,
+    val isOn: Boolean,
+    private val action: () -> Unit,
+) {
+    fun perform() { runCatching { action() } }
+}
+
+/*
+ * Shuffle the "standard" way: Android's own media API has no shuffle switch, so apps built on the AndroidX media
+ * library (most music apps) understand this special message instead. These names come from that library;
+ * never change them. Android doesn't tell us whether shuffle is on, so Seelie remembers what it last asked for.
+ */
+private const val SHUFFLE_ACTION = "android.support.v4.media.session.action.SET_SHUFFLE_MODE"
+private const val SHUFFLE_ARGUMENT = "android.support.v4.media.session.action.ARGUMENT_SHUFFLE_MODE"
+/** The "can shuffle" flags of that library (the new one and the old one). */
+private const val CAN_SHUFFLE = (1L shl 21) or (1L shl 19)
+
+/**
  * Watches the phone's media sessions and gives back the one to show: the playing one, else the most recent one
  * that has a song. Null when nothing has a song, or when Notification access is off.
  * Cheap: it only wakes up when a player changes, and the position ticks once a second only while playing on screen.
@@ -145,13 +173,29 @@ fun rememberNowPlaying(): NowPlaying? {
 
     // The music app's name and icon, loaded once per app.
     val pkg = picked?.controller?.packageName
-    val iconPx = with(LocalDensity.current) { 20.dp.roundToPx() }
+    val density = LocalDensity.current
+    val iconPx = with(density) { 20.dp.roundToPx() }
     val appBits by produceState<AppBits?>(null, pkg) {
         value = pkg?.let { withContext(Dispatchers.IO) { loadApp(app, it, iconPx) } }
     }
 
-    // The clock that moves the position on: only while really playing, and only while the screen is visible.
+    // The app's extra buttons ("custom actions") and their icons from the app itself, loaded off the main thread.
+    // Icons are kept by "app/icon number", so a ♥ that switches between empty and full doesn't load twice.
     val state = picked?.state
+    val customs: List<PlaybackState.CustomAction> = state?.customActions.orEmpty()
+    val iconIds = customs.map { it.icon }.filter { it != 0 }
+    val actionPx = with(density) { 22.dp.roundToPx() }
+    val actionIcons by produceState<Map<String, ImageBitmap>>(emptyMap(), pkg, iconIds) {
+        val missing = iconIds.filter { "$pkg/$it" !in value }
+        if (pkg != null && missing.isNotEmpty()) {
+            val loaded = withContext(Dispatchers.IO) { loadActionIcons(app, pkg, missing, actionPx) }
+            value = value + loaded
+        }
+    }
+    // What Seelie last asked shuffle to be (Android can't tell us), per app.
+    var shuffleOn by remember(pkg) { mutableStateOf(false) }
+
+    // The clock that moves the position on: only while really playing, and only while the screen is visible.
     val ticking = state?.state == PlaybackState.STATE_PLAYING
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(owner, ticking) {
@@ -171,6 +215,24 @@ fun rememberNowPlaying(): NowPlaying? {
     val actions = state?.actions ?: 0L
     fun can(action: Long) = actions == 0L || actions and action != 0L
 
+    val controller = picked.controller
+    val extras = buildList {
+        // Standard shuffle, unless the app already offers its own shuffle button.
+        val ownShuffle = customs.any { "shuffle" in it.action.lowercase() || "shuffle" in it.name?.toString().orEmpty().lowercase() }
+        if (actions and CAN_SHUFFLE != 0L && !ownShuffle) {
+            add(MediaExtra("Shuffle", icon = null, isShuffle = true, isOn = shuffleOn) {
+                val turnOn = !shuffleOn
+                controller.transportControls.sendCustomAction(SHUFFLE_ACTION, Bundle().apply { putInt(SHUFFLE_ARGUMENT, if (turnOn) 1 else 0) })
+                shuffleOn = turnOn
+            })
+        }
+        customs.forEach { custom ->
+            add(MediaExtra(custom.name?.toString().orEmpty(), icon = actionIcons["$pkg/${custom.icon}"], isShuffle = false, isOn = false) {
+                controller.transportControls.sendCustomAction(custom, custom.extras)
+            })
+        }
+    }
+
     return NowPlaying(
         title = title,
         artist = artist,
@@ -186,7 +248,8 @@ fun rememberNowPlaying(): NowPlaying? {
         canSkipNext = can(PlaybackState.ACTION_SKIP_TO_NEXT),
         canSkipPrevious = can(PlaybackState.ACTION_SKIP_TO_PREVIOUS),
         canSeek = duration > 0 && state != null && state.actions and PlaybackState.ACTION_SEEK_TO != 0L,
-        controller = picked.controller,
+        extras = extras,
+        controller = controller,
     )
 }
 
@@ -448,6 +511,14 @@ private fun glowColour(bitmap: Bitmap): Color? {
     hsv[1] = if (greyCover) hsv[1].coerceAtMost(0.15f) else hsv[1].coerceIn(0.45f, 0.85f)
     hsv[2] = hsv[2].coerceIn(0.7f, 0.95f)
     return Color(AndroidColor.HSVToColor(hsv))
+}
+
+/** Runs off the main thread: the extra buttons' icons from the music app's own files, as "app/icon number" → picture. */
+private fun loadActionIcons(context: Context, packageName: String, ids: List<Int>, px: Int): Map<String, ImageBitmap> {
+    val resources = runCatching { context.packageManager.getResourcesForApplication(packageName) }.getOrNull() ?: return emptyMap()
+    return ids.mapNotNull { id ->
+        runCatching { resources.getDrawable(id, null)?.toBitmap(px, px)?.asImageBitmap() }.getOrNull()?.let { "$packageName/$id" to it }
+    }.toMap()
 }
 
 /** Runs off the main thread: the app's name and its icon at [px] pixels. */

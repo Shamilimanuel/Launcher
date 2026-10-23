@@ -28,6 +28,8 @@ data class MusicStyle(
     val cardOpacity: Int = 55,
     /** Its own corner rounding (dp). */
     val cardRadius: Int = 24,
+    /** The cover fills the whole card, blurred and dimmed, with white text on top (like Samsung's player). */
+    val artBackground: Boolean = false,
 
     /** Cover size: "small", "medium" or "large" (≈ 48 / 72 / 96 dp on the large card). */
     val artSize: String = "medium",
@@ -43,6 +45,8 @@ data class MusicStyle(
     val buttons: String = "filled",
     /** Show ⏮ and ⏭. */
     val skipButtons: Boolean = true,
+    /** The app's extra buttons (shuffle, ♥ like, + add…), at most two. */
+    val extraButtons: Boolean = true,
 
     /** Title size in sp (14–22). */
     val titleSize: Float = 16.5f,
@@ -52,7 +56,7 @@ data class MusicStyle(
 
     /** The cover on the "left" or the "right". */
     val artSide: String = "left",
-    /** Progress bar: "thin" line, "thick" rounded bar, or "none". */
+    /** Progress bar: "thin" line, "thick" rounded bar, "wavy" (a gently moving wave while playing), or "none". */
     val bar: String = "thin",
 
     /** When nothing plays: "keep" its spot ("Nothing playing"), shrink to a small "line", or "hide". */
@@ -61,8 +65,9 @@ data class MusicStyle(
     fun toJson(): String = JSONObject().apply {
         put("show", show); put("size", size)
         put("followHome", followHome); put("cardStyle", cardStyle); put("cardOpacity", cardOpacity); put("cardRadius", cardRadius)
+        put("artBackground", artBackground)
         put("artSize", artSize); put("artShape", artShape); put("artGlow", artGlow)
-        put("accent", accent); put("buttons", buttons); put("skipButtons", skipButtons)
+        put("accent", accent); put("buttons", buttons); put("skipButtons", skipButtons); put("extraButtons", extraButtons)
         put("titleSize", titleSize.toDouble()); put("showApp", showApp); put("showArtist", showArtist)
         put("artSide", artSide); put("bar", bar); put("idle", idle)
     }.toString()
@@ -78,12 +83,14 @@ data class MusicStyle(
                 cardStyle = o.optString("cardStyle", base.cardStyle),
                 cardOpacity = o.optInt("cardOpacity", base.cardOpacity),
                 cardRadius = o.optInt("cardRadius", base.cardRadius),
+                artBackground = o.optBoolean("artBackground", base.artBackground),
                 artSize = o.optString("artSize", base.artSize),
                 artShape = o.optString("artShape", base.artShape),
                 artGlow = o.optBoolean("artGlow", base.artGlow),
                 accent = o.optString("accent", base.accent),
                 buttons = o.optString("buttons", base.buttons),
                 skipButtons = o.optBoolean("skipButtons", base.skipButtons),
+                extraButtons = o.optBoolean("extraButtons", base.extraButtons),
                 titleSize = o.optDouble("titleSize", base.titleSize.toDouble()).toFloat(),
                 showApp = o.optBoolean("showApp", base.showApp),
                 showArtist = o.optBoolean("showArtist", base.showArtist),

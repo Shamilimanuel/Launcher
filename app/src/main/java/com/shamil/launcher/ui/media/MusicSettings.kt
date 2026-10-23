@@ -81,10 +81,22 @@ fun ColumnScope.MusicSettingsContent(showPreview: Boolean = true) {
     Choice("Size", listOf(MusicPrefs.SIZE_LARGE to "Large", MusicPrefs.SIZE_COMPACT to "Compact"), ms.size) { v ->
         change { it.copy(size = v) }
     }
-    Choice("Card look", listOf("home" to "Follow Home style", "own" to "Its own"), if (ms.followHome) "home" else "own") { v ->
-        change { it.copy(followHome = v == "home") }
+    val cardLook = when {
+        ms.artBackground -> "art"
+        ms.followHome -> "home"
+        else -> "own"
     }
-    val own = !ms.followHome
+    Choice("Card look", listOf("home" to "Home style", "own" to "Its own", "art" to "Album art"), cardLook) { v ->
+        change { it.copy(artBackground = v == "art", followHome = if (v == "art") it.followHome else v == "home") }
+    }
+    Hint(
+        when (cardLook) {
+            "art" -> "The cover fills the card, softly blurred and dimmed, with white text on top."
+            "home" -> "Matches your widget card (Look → Home style)."
+            else -> "Its own card, shaped below."
+        }
+    )
+    val own = cardLook == "own"
     Choice("Style", listOf("none" to "None", "glass" to "Glass", "solid" to "Solid", "outline" to "Outline"), ms.cardStyle, enabled = own) { v ->
         change { it.copy(cardStyle = v) }
     }
@@ -92,7 +104,8 @@ fun ColumnScope.MusicSettingsContent(showPreview: Boolean = true) {
     Slide("See-through", ms.cardOpacity.toFloat(), 0f..100f, steps = 19, unit = "%", enabled = ownCard) { v ->
         change { it.copy(cardOpacity = v.roundToInt()) }
     }
-    Slide("Corners", ms.cardRadius.toFloat(), 0f..36f, steps = 17, unit = "dp", enabled = ownCard) { v ->
+    // Corners also shape the album-art card.
+    Slide("Corners", ms.cardRadius.toFloat(), 0f..36f, steps = 17, unit = "dp", enabled = ownCard || cardLook == "art") { v ->
         change { it.copy(cardRadius = v.roundToInt()) }
     }
 
@@ -109,6 +122,11 @@ fun ColumnScope.MusicSettingsContent(showPreview: Boolean = true) {
     SectionLabel("Buttons")
     Choice("Play button", listOf("filled" to "Filled", "outline" to "Outline", "plain" to "Plain"), ms.buttons) { v -> change { it.copy(buttons = v) } }
     Choice("⏮ ⏭ buttons", ON_OFF, ms.skipButtons.onOff()) { v -> change { it.copy(skipButtons = v == "on") } }
+    Choice("Extra buttons", ON_OFF, ms.extraButtons.onOff()) { v -> change { it.copy(extraButtons = v == "on") } }
+    Hint(
+        "Up to two of the music app's own buttons, like shuffle or ♥ like (Spotify, YouTube Music…). " +
+            "On the large card the buttons get their own row; compact shows one."
+    )
 
     SectionLabel("Text")
     Slide("Title size", ms.titleSize, 14f..22f, steps = 15, unit = "sp") { v -> change { it.copy(titleSize = v) } }
@@ -117,7 +135,9 @@ fun ColumnScope.MusicSettingsContent(showPreview: Boolean = true) {
 
     SectionLabel("Layout")
     Choice("Cover", listOf("left" to "Left", "right" to "Right"), ms.artSide) { v -> change { it.copy(artSide = v) } }
-    Choice("Progress bar", listOf("thin" to "Thin line", "thick" to "Thick", "none" to "None"), ms.bar) { v -> change { it.copy(bar = v) } }
+    Choice("Progress bar", listOf("thin" to "Thin", "thick" to "Thick", "wavy" to "Wavy", "none" to "None"), ms.bar) { v -> change { it.copy(bar = v) } }
+    if (ms.bar == "wavy") Hint("While the song plays, the played part ripples gently; it lies flat when you pause.")
+    if (ms.bar != "none") Hint("Tap or drag along the bar to jump in the song (when the music app allows it).")
 
     SectionLabel("When nothing plays")
     Choice("The card", listOf("keep" to "Keeps its spot", "line" to "Small line", "hide" to "Hides"), ms.idle) { v ->
