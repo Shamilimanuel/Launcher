@@ -114,7 +114,9 @@ fun LetterRail(
             .pointerInput(Unit) {
                 fun follow(x: Float, y: Float) {
                     fingerX = x
-                    fingerY = y.coerceIn(0f, size.height.toFloat())
+                    // The wave and bubble follow the thumb freely, even above ☆ or below • (like Niagara;
+                    // 23 Oct he hit a "limit" at the top). Only the picked letter stops at the rail's ends.
+                    fingerY = y.coerceIn(-size.height * 0.6f, size.height * 1.6f)
                     // Past the middle of the screen = sliding onto the list: the wave lets go, a firmer buzz
                     // marks the switch, and we report where the thumb is. (The rail sits at the screen's right edge.)
                     val middle = (railLeft + size.width) / 2 - railLeft
