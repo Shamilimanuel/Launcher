@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Seelie settings appearing: a quick ~0.2 s fade over the home, like Niagara's settings. -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="200"
+    android:fromAlpha="0"
+    android:interpolator="@android:interpolator/decelerate_quad"
+    android:toAlpha="1" />

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- See-through window so the phone's wallpaper shows behind the home screen. -->
+    <style name="Theme.Launcher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowShowWallpaper">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+    </style>
+
+    <!-- Seelie settings: a normal, solid app window (night blue) instead of the see-through home. -->
+    <style name="Theme.Seelie.Settings" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/settings_background</item>
+    </style>
+</resources>

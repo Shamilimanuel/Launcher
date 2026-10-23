@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        Android 11+ hides other apps from us unless we say which ones we need to see.
+        This asks for "every app that has an icon in the app list" - exactly what a launcher shows.
+    -->
+    <!-- Weather: download the forecast from Open-Meteo, using only a rough (~10 km) location. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Lets us show Android's "Uninstall this app?" dialog from the app menu. -->
+    <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Icon packs (like Darko) label themselves with one of these. -->
+        <intent>
+            <action android:name="org.adw.launcher.THEMES" />
+        </intent>
+        <intent>
+            <action android:name="com.novalauncher.THEME" />
+        </intent>
+    </queries>
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Launcher">
+        <!--
+            The home screen.
+            singleTask + clearTaskOnLaunch: there is only ever one home, and pressing Home always lands on it.
+            stateNotNeeded: Android may restart it freely without saving anything.
+            excludeFromRecents: the home screen doesn't show up in the recent-apps list.
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTask"
+            android:resumeWhilePausing="true"
+            android:stateNotNeeded="true"
+            android:theme="@style/Theme.Launcher"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Shows up in the app list (and lets Android Studio's Run button open it). -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Tells Android "I can be the Home screen". -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            "Seelie settings" (Serenitea): a window INSIDE Seelie, like Niagara's settings. No icon of its own
+            (no LAUNCHER filter) and no task of its own, so it never shows up as a separate app or in recent apps.
+            It lives on top of the home screen: Back closes it, and Home (singleTask) clears it away.
+        -->
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="false"
+            android:label="@string/settings_name"
+            android:theme="@style/Theme.Seelie.Settings" />
+    </application>
+
+</manifest>
