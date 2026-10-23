@@ -20,6 +20,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,7 +58,9 @@ fun WidgetStack(modifier: Modifier = Modifier) {
     if (stack.isEmpty()) return
 
     val today = rememberToday()
-    val pager = rememberPagerState { store.stack.size }
+    // Opens on the widget he was last on, and remembers every page he settles on.
+    val pager = rememberPagerState(initialPage = store.lastPage.coerceIn(0, (stack.size - 1).coerceAtLeast(0))) { store.stack.size }
+    LaunchedEffect(pager) { snapshotFlow { pager.settledPage }.collect { store.rememberPage(it) } }
     // App widgets can be small, medium or large: the stack's height glides to the widget you're on.
     val builtIn = widgetHeight(HomeStyleStore.get(context).style)
     val height by animateDpAsState(store.heightOf(store.stack.getOrNull(pager.currentPage), builtIn), spring(dampingRatio = 0.85f, stiffness = 400f), label = "stack height")

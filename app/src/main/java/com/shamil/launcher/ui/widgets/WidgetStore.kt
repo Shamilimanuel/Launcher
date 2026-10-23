@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.annotation.DrawableRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -95,6 +96,16 @@ class WidgetStore private constructor(context: Context) {
     /** The size he picked for each app widget, by its app widget id. */
     var appSizes by mutableStateOf(loadSizes())
         private set
+
+    /** The widget he was last on, so the stack opens there again (23 Oct: it jumped back to 1 after using the A–Z). */
+    var lastPage by mutableIntStateOf(prefs.getInt(KEY_PAGE, 0))
+        private set
+
+    fun rememberPage(page: Int) {
+        if (page == lastPage) return
+        lastPage = page
+        prefs.edit { putInt(KEY_PAGE, page) }
+    }
 
     var cardStyle by mutableStateOf(CardStyle.byId(prefs.getString(KEY_CARD, null)))
         private set
@@ -188,6 +199,7 @@ class WidgetStore private constructor(context: Context) {
         private const val KEY_STACK = "stack"
         private const val KEY_SIZES = "app_sizes"
         private const val KEY_CARD = "card_style"
+        private const val KEY_PAGE = "last_page"
         private const val KEY_NOTES = "notes"
         @Volatile private var instance: WidgetStore? = null
 
