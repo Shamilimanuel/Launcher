@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -47,6 +48,7 @@ import com.shamil.launcher.ui.clock.ClockFace
 import com.shamil.launcher.ui.clock.ClockStore
 import com.shamil.launcher.ui.clock.DateFace
 import com.shamil.launcher.ui.theme.Cinzel
+import com.shamil.launcher.ui.theme.CormorantGaramond
 import com.shamil.launcher.ui.theme.LauncherLook
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import java.time.LocalDateTime
@@ -153,29 +155,99 @@ fun BundleClock(time: LocalDateTime, is24h: Boolean, modifier: Modifier = Modifi
     }
 }
 
-/** The bundle's date (what "Plain" in Clock & date now means): plain, capitals or a pill, maybe with a hairline. */
+/**
+ * Every date look, in the order the settings show them: (saved name, title). 23 Oct he asked for "more Date looks",
+ * so besides plain / capitals / pill there are nine more.
+ */
+val DATE_LOOKS = listOf(
+    "plain" to "Plain", "short" to "Short", "caps" to "Capitals", "split" to "Split", "big" to "Big day", "badge" to "Badge",
+    "serif" to "Serif", "spaced" to "Spaced", "numbers" to "Numbers", "pill" to "Pill", "outline" to "Outline", "stamp" to "Stamp",
+)
+
+/**
+ * The bundle's date (what "Plain" in Clock & date now means), in one of [DATE_LOOKS], maybe with a hairline under it.
+ * [lookOverride] draws another look (for the sample tiles in settings) without changing his choice.
+ */
 @Composable
-fun BundleDate(time: LocalDateTime, modifier: Modifier = Modifier, scale: Float = 1f) {
+fun BundleDate(time: LocalDateTime, modifier: Modifier = Modifier, scale: Float = 1f, lookOverride: String? = null) {
     val look = LocalLauncherLook.current
     val hs = HomeStyleStore.get(LocalContext.current).style
+    val dateLook = lookOverride ?: hs.dateStyle
     val locale = Locale.getDefault()
+    fun format(pattern: String) = time.format(DateTimeFormatter.ofPattern(pattern, locale)).replace(".", "")
     // His phone's language: "vrijdag 23 oktober".
-    val words = time.format(DateTimeFormatter.ofPattern("EEEE d MMMM", locale))
+    val words = format("EEEE d MMMM")
     val colour = look.pick(hs.dateColor, dim = 0.86f)
     val size = (hs.dateSize * scale).sp
-    val text = when (hs.dateStyle) {
-        "caps" -> TextStyle(fontFamily = look.font, fontWeight = FontWeight.ExtraBold, fontSize = size, letterSpacing = 0.22.em,
-            color = colour, shadow = look.shadow)
-        "pill" -> TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, fontSize = size, color = colour)
-        else -> TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = size, color = colour, shadow = look.shadow)
-    }
+    val plain = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = size, color = colour, shadow = look.shadow)
+    val bold = plain.copy(fontWeight = FontWeight.Bold)
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (hs.dateStyle == "caps") words.uppercase(locale) else words,
-                modifier = if (hs.dateStyle == "pill") Modifier.homeChip(look, scale) else Modifier,
-                style = text,
-            )
+            when (dateLook) {
+                // "vr 23 okt"
+                "short" -> Text(format("EEE d MMM"), style = plain)
+                "caps" -> Text(words.uppercase(locale), style = plain.copy(fontWeight = FontWeight.ExtraBold, letterSpacing = 0.22.em))
+                // The day's name in the accent, the rest calm: "Vrijdag 23 oktober".
+                "split" -> {
+                    Text(format("EEEE").replaceFirstChar { it.titlecase(locale) }, style = bold.copy(color = look.accent))
+                    Text(" " + format("d MMMM"), style = plain)
+                }
+                // A big day number with the day and month stacked small beside it.
+                "big" -> {
+                    Text(format("d"), style = bold.copy(fontSize = size * 2.3f, letterSpacing = (-0.02).em))
+                    Spacer(Modifier.width(8.dp * scale))
+                    Column {
+                        Text(format("EEEE").uppercase(locale), style = plain.copy(fontWeight = FontWeight.ExtraBold, fontSize = size * 0.72f, letterSpacing = 0.18.em))
+                        Text(format("MMMM").uppercase(locale), style = plain.copy(fontSize = size * 0.72f, letterSpacing = 0.18.em, color = colour.copy(alpha = colour.alpha * 0.75f)))
+                    }
+                }
+                // The day number in a glowing accent circle.
+                "badge" -> {
+                    Box(
+                        Modifier
+                            .size(size.value.dp * 1.9f)
+                            .drawBehind { drawCircle(Brush.radialGradient(listOf(look.accent.copy(alpha = 0.5f), Color.Transparent)), radius = this.size.minDimension * 0.75f) }
+                            .background(look.accent, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(format("d"), style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.ExtraBold, fontSize = size * 0.95f, color = look.sheet.copy(alpha = 1f)))
+                    }
+                    Spacer(Modifier.width(8.dp * scale))
+                    Text(format("EEEE") + " · " + format("MMMM"), style = plain)
+                }
+                // Elegant italic serif.
+                "serif" -> Text(words, style = plain.copy(fontFamily = CormorantGaramond, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Medium, fontSize = size * 1.25f))
+                // Wide-spaced capitals: "VR 23 OKT".
+                "spaced" -> Text(format("EEE d MMM").uppercase(locale), style = plain.copy(fontWeight = FontWeight.Bold, fontSize = size * 0.85f, letterSpacing = 0.45.em))
+                // "23 · 10 · 2026", the dots in the accent.
+                "numbers" -> {
+                    val dot = TextStyle(fontFamily = look.font, fontWeight = FontWeight.ExtraBold, fontSize = size, color = look.accent)
+                    Text(format("dd"), style = bold)
+                    Text(" · ", style = dot)
+                    Text(format("MM"), style = bold)
+                    Text(" · ", style = dot)
+                    Text(format("yyyy"), style = plain)
+                }
+                "pill" -> Text(words, modifier = Modifier.homeChip(look, scale), style = bold.copy(shadow = null))
+                // A pill with only a glowing accent border.
+                "outline" -> Text(
+                    words,
+                    modifier = Modifier
+                        .border(1.dp, look.accent.copy(alpha = 0.75f), RoundedCornerShape(16.dp * scale))
+                        .padding(horizontal = 13.dp * scale, vertical = 5.dp * scale),
+                    style = bold,
+                )
+                // A little tilted postmark tag in small capitals.
+                "stamp" -> Text(
+                    format("EEE d MMM").uppercase(locale),
+                    modifier = Modifier
+                        .graphicsLayer { rotationZ = -3f }
+                        .border(1.5.dp, colour.copy(alpha = 0.8f), RoundedCornerShape(4.dp * scale))
+                        .padding(horizontal = 9.dp * scale, vertical = 3.dp * scale),
+                    style = plain.copy(fontWeight = FontWeight.ExtraBold, fontSize = size * 0.8f, letterSpacing = 0.16.em),
+                )
+                else -> Text(words, style = plain)
+            }
             if (hs.spirit && !hs.dateRule) {
                 Text(" ✦", style = TextStyle(color = look.accent, fontSize = size * 0.8f, shadow = Shadow(look.accent, blurRadius = 8f)))
             }

@@ -43,6 +43,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shamil.launcher.ui.clock.rememberClockTime
+import com.shamil.launcher.ui.home.BundleDate
+import com.shamil.launcher.ui.home.DATE_LOOKS
 import com.shamil.launcher.ui.home.Gold
 import com.shamil.launcher.ui.home.HomeBundle
 import com.shamil.launcher.ui.home.HomeStyle
@@ -92,7 +94,18 @@ fun ColumnScope.HomeStyleSettingsContent() {
     Hint("This is the \"Home style\" clock. Fun faces like Neon or In words are in Look → Clock & date.")
 
     SectionLabel("Date")
-    Choice("Style", listOf("plain" to "Plain", "caps" to "Capitals", "pill" to "Pill"), s.dateStyle) { v -> change { it.copy(dateStyle = v) } }
+    // Every date look as a tile that draws today's date in that look (12 of them; he asked for more, 23 Oct).
+    val time = rememberClockTime()
+    DATE_LOOKS.chunked(2).forEach { pair ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+            pair.forEach { (id, title) ->
+                DateTile(title, selected = s.dateStyle == id, onClick = { change { it.copy(dateStyle = id) } }) {
+                    BundleDate(time, scale = 0.72f, lookOverride = id)
+                }
+            }
+            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
     Slide("Size", s.dateSize, 11f..20f, 17, "sp") { v -> change { it.copy(dateSize = (v * 2).roundToInt() / 2f) } }
     Choice("Colour", COLOURS, s.dateColor) { v -> change { it.copy(dateColor = v) } }
     Choice("Hairline under the date", ON_OFF, s.dateRule.onOff()) { v -> change { it.copy(dateRule = v == "on") } }
@@ -246,6 +259,37 @@ private fun RowScope.BundleTile(b: HomeBundle, selected: Boolean, custom: Boolea
             }
         }
         Text(b.feel, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 11.sp, lineHeight = 14.sp))
+    }
+}
+
+/** One date look to pick: the real date drawn in that look, its name under it, an accent border + ✓ when picked. */
+@Composable
+private fun RowScope.DateTile(title: String, selected: Boolean, onClick: () -> Unit, sample: @Composable () -> Unit) {
+    val look = LocalLauncherLook.current
+    val press = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        Modifier
+            .weight(1f)
+            .staggerIn()
+            .height(96.dp)
+            .pressFeel(press, look.accent, 18.dp)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(look.sheetTop.copy(alpha = 1f), look.sheet.copy(alpha = 1f))))
+            .border(if (selected) 2.dp else 1.dp, if (selected) look.accent else Color.White.copy(alpha = 0.08f), shape)
+            .clickable(interactionSource = press, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(6.dp)), contentAlignment = Alignment.CenterStart) { sample() }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(title, modifier = Modifier.weight(1f),
+                style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = if (selected) look.accent else look.textDim, fontSize = 12.sp))
+            AnimatedVisibility(selected, enter = scaleIn(spring(dampingRatio = 0.45f, stiffness = 500f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
+                Box(Modifier.size(18.dp).background(look.accent, CircleShape), contentAlignment = Alignment.Center) {
+                    Text("✓", style = TextStyle(color = look.sheet.copy(alpha = 1f), fontSize = 10.sp, fontWeight = FontWeight.Bold))
+                }
+            }
+        }
     }
 }
 
