@@ -91,6 +91,19 @@
             android:exported="false"
             android:label="@string/settings_name"
             android:theme="@style/Theme.Seelie.Settings" />
+        <!--
+            Seelie's notification listener: shows messages on his favourites (+ quick reply), the music card
+            and the Quiet toggle. Only works after he switches on "Notification access" for Seelie; stays on the phone.
+        -->
+        <service
+            android:name=".notify.SeelieNotificationListener"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>
