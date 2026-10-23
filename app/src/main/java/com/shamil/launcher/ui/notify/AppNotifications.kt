@@ -65,6 +65,8 @@ data class AppNotif(
     val avatar: ImageBitmap?,
     /** The app's small status-bar glyph (white shape; tint it). */
     val smallIcon: ImageBitmap?,
+    /** The big picture some apps add (a YouTube video's thumbnail, a photo someone sent), shrunk for the card. */
+    val picture: ImageBitmap? = null,
     /** What tapping the notification would open. */
     val contentIntent: PendingIntent?,
     /** The app's "Reply" button with a text box behind it (a RemoteInput), if it has one. */
@@ -79,7 +81,7 @@ data class AppNotif(
 }
 
 /** Pictures decoded once per notification (key + post time), so scrolling never decodes again. */
-private class NotifImages(val avatar: ImageBitmap?, val small: ImageBitmap?, val people: Map<String, ImageBitmap?>)
+private class NotifImages(val avatar: ImageBitmap?, val small: ImageBitmap?, val people: Map<String, ImageBitmap?>, val picture: ImageBitmap?)
 
 /**
  * Turns Android's raw notification list into [AppNotif]s per app. Shared by every row: the work is done once per
@@ -184,6 +186,7 @@ internal object NotifReader {
             conversation = conversation,
             avatar = pics.avatar,
             smallIcon = pics.small,
+            picture = pics.picture,
             contentIntent = n.contentIntent,
             replyAction = findReply(n),
             clearable = sbn.isClearable,
@@ -214,8 +217,24 @@ internal object NotifReader {
                 people[id] = runCatching { p.icon?.loadDrawable(context)?.toImage() }.getOrNull()
             }
         }
-        return NotifImages(avatar, small, people)
+        return NotifImages(avatar, small, people, bigPicture(context, n.extras ?: Bundle.EMPTY))
     }
+
+    /** The BigPictureStyle picture: a Bitmap in older apps, an Icon on Android 12+. Shrunk so the cache stays small. */
+    @Suppress("DEPRECATION")
+    private fun bigPicture(context: Context, extras: Bundle): ImageBitmap? = runCatching {
+        val bitmap = extras.get(Notification.EXTRA_PICTURE) as? android.graphics.Bitmap
+        when {
+            bitmap != null -> {
+                val scale = minOf(1f, PICTURE_PX.toFloat() / max(bitmap.width, bitmap.height))
+                if (scale >= 1f) bitmap.asImageBitmap()
+                else android.graphics.Bitmap.createScaledBitmap(bitmap, max(1, (bitmap.width * scale).roundToInt()), max(1, (bitmap.height * scale).roundToInt()), true).asImageBitmap()
+            }
+            android.os.Build.VERSION.SDK_INT >= 31 ->
+                (extras.get(Notification.EXTRA_PICTURE_ICON) as? android.graphics.drawable.Icon)?.loadDrawable(context)?.toImage(PICTURE_PX)
+            else -> null
+        }
+    }.getOrNull()
 
     /** Draws a picture at most [px] pixels on its longest side (enough for a 40dp circle), keeping its shape. */
     private fun Drawable.toImage(px: Int = AVATAR_PX): ImageBitmap {
@@ -228,6 +247,7 @@ internal object NotifReader {
     private const val MAX_MESSAGES = 5
     private const val AVATAR_PX = 128
     private const val SMALL_PX = 48
+    private const val PICTURE_PX = 540
 }
 
 /**

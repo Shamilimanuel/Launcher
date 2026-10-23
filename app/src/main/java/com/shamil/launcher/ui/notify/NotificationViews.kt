@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -335,6 +336,15 @@ private fun NotifEntry(app: AppEntry, notif: AppNotif, now: Long, canReply: Bool
                 if (text.isNotEmpty()) {
                     Text(text, style = TextStyle(fontFamily = look.font, color = look.text.copy(alpha = 0.92f), fontSize = 15.sp, lineHeight = 21.sp))
                 }
+            }
+            // The big picture (a YouTube video's thumbnail, a sent photo): tap it to open, like the notification.
+            notif.picture?.let { pic ->
+                Image(
+                    pic, contentDescription = "Preview", contentScale = ContentScale.Crop,
+                    modifier = Modifier.padding(top = 8.dp, end = 8.dp).fillMaxWidth()
+                        .aspectRatio((pic.width.toFloat() / pic.height).coerceIn(0.75f, 2.4f))
+                        .clip(RoundedCornerShape(14.dp)).clickable(onClick = onOpen),
+                )
             }
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill("Open", look, onClick = onOpen)
