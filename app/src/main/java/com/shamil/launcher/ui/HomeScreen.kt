@@ -24,6 +24,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -160,6 +164,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     // His home style: how the clock, date, glance line and widget card look together (one bundle + tweaks).
     val homeStyle = HomeStyleStore.get(context).style
     LaunchedEffect(listLetter) { glance.open = false }
+    // The swipe-right pop-up: one at a time, closed by a tap outside it, by Back, or by switching list/favourites.
+    val popups = remember { PopupHolder() }
+    LaunchedEffect(listLetter, state.searching) { popups.close() }
+    BackHandler(enabled = popups.openKey != null) { popups.close() }
 
     // The app whose menu is open (long-press), or null.
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
@@ -182,8 +190,21 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // BoxWithConstraints tells us the screen size, so positions can be a share of the height like in the notes.
     // Rows anywhere below can open the chooser (a left swipe on an app with no action yet).
-    CompositionLocalProvider(LocalGestureChooser provides { app: AppEntry -> gestureApp = app }) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalGestureChooser provides { app: AppEntry -> gestureApp = app }, LocalPopupHolder provides popups) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            // A tap (not a drag) outside the open pop-up closes it. Watching only, so the tap still reaches what it hit.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val up = waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: return@awaitEachGesture
+                    val moved = (up.position - down.position).getDistance() > viewConfiguration.touchSlop
+                    val inside = popups.bounds?.contains(down.position) == true
+                    if (popups.openKey != null && !moved && !inside) popups.close()
+                }
+            }
+    ) {
         val screenH = maxHeight
 
         KeepAliveFade(visible = listLetter == null && !state.searching && !state.editingFavourites) {

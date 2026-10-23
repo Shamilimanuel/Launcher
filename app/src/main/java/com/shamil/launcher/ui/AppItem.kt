@@ -34,6 +34,9 @@ import com.shamil.launcher.apps.GestureStore
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -54,6 +57,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * Which app's swipe-right pop-up is open (only one at a time) and where it is on screen, so a tap anywhere
+ * outside it closes it (his ask, 23 Oct: "when you swipe right and click away it should also go away").
+ */
+class PopupHolder {
+    var openKey by mutableStateOf<String?>(null)
+    var bounds: Rect? = null
+
+    fun close() {
+        openKey = null
+        bounds = null
+    }
+}
+val LocalPopupHolder = staticCompositionLocalOf { PopupHolder() }
+
 /** Opens the "swipe left" chooser for an app (the home screen provides it). */
 val LocalGestureChooser = staticCompositionLocalOf<(AppEntry) -> Unit> { {} }
 
@@ -73,7 +91,8 @@ fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit
     val maxPull = with(density) { 90.dp.toPx() }
     val chooseGesture = LocalGestureChooser.current
     val leftAction = GestureStore.get(context).actionFor(app.component.packageName)
-    var popupOpen by remember { mutableStateOf(false) }
+    val popups = LocalPopupHolder.current
+    val popupOpen = popups.openKey == app.key
     var dragX by remember { mutableFloatStateOf(0f) }
     var armed by remember { mutableStateOf(false) }
 
@@ -115,10 +134,10 @@ fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit
                             val pulled = dragX
                             when {
                                 pulled > openAt -> {
-                                    popupOpen = !popupOpen
+                                    if (popupOpen) popups.close() else popups.openKey = app.key
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
-                                popupOpen && pulled < 0 -> popupOpen = false
+                                popupOpen && pulled < 0 -> popups.close()
                                 pulled < -openAt -> {
                                     // Swipe left: his action for this app, or the chooser when there's none (or it broke).
                                     val action = GestureStore.get(context).actionFor(app.component.packageName)
@@ -146,14 +165,14 @@ fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            ShortcutsPopup(app, onClose = { popupOpen = false })
+            ShortcutsPopup(app, onClose = { popups.close() }, modifier = Modifier.onGloballyPositioned { popups.bounds = it.boundsInRoot() })
         }
     }
 }
 
 /** The pop-up card under the row: the app's shortcuts, each opens straight into that part of the app. */
 @Composable
-private fun ShortcutsPopup(app: AppEntry, onClose: () -> Unit) {
+private fun ShortcutsPopup(app: AppEntry, onClose: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val look = LocalLauncherLook.current
     var loaded by remember { mutableStateOf(false) }
@@ -164,7 +183,7 @@ private fun ShortcutsPopup(app: AppEntry, onClose: () -> Unit) {
     }
 
     Column(
-        Modifier
+        modifier
             .padding(start = ROW_START, end = 8.dp, bottom = 10.dp)
             .fillMaxWidth()
             .background(look.panel, RoundedCornerShape(20.dp))
