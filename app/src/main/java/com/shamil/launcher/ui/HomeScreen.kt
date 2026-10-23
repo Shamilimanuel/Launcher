@@ -47,6 +47,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -162,6 +163,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The app whose menu is open (long-press), or null.
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    // The "swipe left" chooser for one app (or null).
+    var gestureApp by remember { mutableStateOf<AppEntry?>(null) }
     // The "Seelie widget" sheet (long-press beside the clock).
     var widgetSheet by remember { mutableStateOf(false) }
     val openMenu = { app: AppEntry -> menuApp = app }
@@ -178,6 +181,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     BackHandler(enabled = state.searching) { state.closeSearch() }
 
     // BoxWithConstraints tells us the screen size, so positions can be a share of the height like in the notes.
+    // Rows anywhere below can open the chooser (a left swipe on an app with no action yet).
+    CompositionLocalProvider(LocalGestureChooser provides { app: AppEntry -> gestureApp = app }) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val screenH = maxHeight
 
@@ -312,6 +317,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         }
     }
 
+    }
+
+    gestureApp?.let { app -> GestureSheet(app, listedApps) { gestureApp = null } }
+
     if (widgetSheet) {
         HomeWidgetSheet(
             onEditFavourites = {
@@ -337,6 +346,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             onToggleHidden = { tweaks.setHidden(pkg, !tweaks.isHidden(pkg)) },
             onRename = { tweaks.rename(pkg, it) },
             onDismiss = { menuApp = null },
+            onSwipeLeft = { gestureApp = app },
         )
     }
 }

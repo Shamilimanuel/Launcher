@@ -51,16 +51,16 @@ private val RAIL = listOf(STAR, "#") + ('A'..'Z').map { it.toString() } + DOT
  * the hill is very wide, and the letters hardly grow.
  */
 /** How far the letter under your finger bends out while your thumb is still on the rail. */
-private val WAVE_REACH = 90.dp
+private val WAVE_REACH = 86.dp   // measured from his Niagara screenshot (thumb resting on the rail), 23 Oct
 /**
  * Once your thumb drags left, the peak letter stays this far left of it, so the thumb never covers it.
  * (23 Oct: 56dp felt like the letters kept their distance; he wanted them "pulled towards my thumb more".)
  */
 private val FINGER_GAP = 30.dp
-/** How wide the wave's hill is, in letters ("sigma" of a Gaussian bell): ~8, so most of the rail moves a little. */
-private const val WAVE_WIDTH = 8f
+/** How wide the wave's hill is, in letters ("sigma" of a Gaussian bell). */
+private const val WAVE_WIDTH = 4.7f   // measured: 3 letters away ~80%, 6 away ~45%, 9 away ~15%
 /** How strongly letters near the thumb are pulled towards it vertically (0 = not at all, 1 = onto the finger). */
-private const val VERTICAL_PULL = 0.38f
+private const val VERTICAL_PULL = 0f   // Niagara keeps the letters evenly spaced (his screenshot); only the stretch moves them
 /** How many letters around the thumb feel that vertical pull (a narrower bell than the sideways wave). */
 private const val VERTICAL_WIDTH = 2.6f
 /** How much bigger the letter under the finger gets (Niagara: barely). */

@@ -30,6 +30,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.shamil.launcher.apps.GestureStore
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -52,21 +54,53 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Opens the "swipe left" chooser for an app (the home screen provides it). */
+val LocalGestureChooser = staticCompositionLocalOf<(AppEntry) -> Unit> { {} }
+
 /**
- * An app row you can also swipe to the RIGHT to open its pop-up (its shortcuts), like Niagara.
- * Swipe left (or right again) to close it.
+ * An app row you can swipe to the RIGHT to open its pop-up (its shortcuts), like Niagara, and to the LEFT for the
+ * action he picked for this app (his locked feature #5): the row slides away revealing the action, a tick when it's
+ * far enough, and letting go does it. No action yet = the chooser opens, so it's easy to find.
  */
 @Composable
 fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit) {
+    val context = LocalContext.current
+    val look = LocalLauncherLook.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val openAt = with(density) { 56.dp.toPx() }
     val maxPull = with(density) { 90.dp.toPx() }
+    val chooseGesture = LocalGestureChooser.current
+    val leftAction = GestureStore.get(context).actionFor(app.component.packageName)
     var popupOpen by remember { mutableStateOf(false) }
     var dragX by remember { mutableFloatStateOf(0f) }
+    var armed by remember { mutableStateOf(false) }
 
     Column {
+      Box(contentAlignment = Alignment.CenterEnd) {
+        // What a left swipe will do, revealed behind the row as it slides away.
+        Row(
+            Modifier
+                .padding(end = 16.dp)
+                .graphicsLayer {
+                    val p = (-dragX / openAt).coerceIn(0f, 1f)
+                    alpha = p
+                    scaleX = 0.85f + 0.15f * p
+                    scaleY = 0.85f + 0.15f * p
+                },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                leftAction?.label ?: "Choose an action",
+                maxLines = 1,
+                style = TextStyle(fontFamily = look.font, color = if (armed) look.accent else look.textDim, fontSize = 15.sp, shadow = look.shadow),
+            )
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.size(28.dp).background(if (armed) look.accent else look.text.copy(alpha = 0.25f), CircleShape), contentAlignment = Alignment.Center) {
+                Text("‹", style = TextStyle(color = if (armed) look.sheet.copy(alpha = 1f) else look.text, fontSize = 18.sp))
+            }
+        }
         AppRow(
             app = app,
             highlighted = highlighted,
@@ -84,18 +118,29 @@ fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit
                                     popupOpen = !popupOpen
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
-                                pulled < -openAt / 2 -> popupOpen = false
+                                popupOpen && pulled < 0 -> popupOpen = false
+                                pulled < -openAt -> {
+                                    // Swipe left: his action for this app, or the chooser when there's none (or it broke).
+                                    val action = GestureStore.get(context).actionFor(app.component.packageName)
+                                    if (action == null || !GestureStore.perform(context, app, action)) chooseGesture(app)
+                                }
                             }
+                            armed = false
                             // Spring the row back into place.
                             scope.launch { animate(dragX, 0f) { value, _ -> dragX = value } }
                         },
-                        onDragCancel = { dragX = 0f },
+                        onDragCancel = { dragX = 0f; armed = false },
                     ) { change, dx ->
                         change.consume()
-                        dragX = (dragX + dx * 0.6f).coerceIn(-maxPull / 2, maxPull)
+                        dragX = (dragX + dx * 0.6f).coerceIn(-maxPull, maxPull)
+                        // A tick the moment a left swipe is far enough to count.
+                        val nowArmed = dragX < -openAt
+                        if (nowArmed && !armed) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        armed = nowArmed
                     }
                 },
         )
+      }
         AnimatedVisibility(
             visible = popupOpen,
             enter = expandVertically() + fadeIn(),

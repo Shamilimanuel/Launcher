@@ -53,6 +53,7 @@ import com.shamil.launcher.DefaultHome
 import com.shamil.launcher.R
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.Apps
+import com.shamil.launcher.apps.GestureStore
 import com.shamil.launcher.settings.SeelieSettings
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import kotlinx.coroutines.launch
@@ -82,6 +83,8 @@ fun AppMenuSheet(
     onToggleHidden: () -> Unit,
     onRename: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** Opens the "swipe left" chooser for this app. */
+    onSwipeLeft: () -> Unit = {},
 ) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
@@ -133,6 +136,10 @@ fun AppMenuSheet(
                 Tile(R.drawable.ic_hourglass, "Screen time", "Digital Wellbeing") { closeThen { Apps.openScreenTime(context, app) } }
                 Tile(R.drawable.ic_edit, "Rename", "Only here") { renaming = true }
             }
+
+            GroupLabel("Gestures")
+            val left = GestureStore.get(context).actionFor(app.component.packageName)
+            Card(R.drawable.ic_touch_app, "Swipe left", (left?.label ?: "Not set") + " · tap to change (swipe right = shortcuts)") { closeThen(onSwipeLeft) }
 
             GroupLabel("Manage")
             Card(R.drawable.ic_drag_indicator, "Edit favourites", "Reorder or remove") { closeThen(onEditFavourites) }
