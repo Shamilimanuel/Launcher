@@ -154,7 +154,8 @@ fun NotificationLine(
                 } else line
                 Text(
                     shown,
-                    maxLines = if (lines.size == 1) 2 else 1,
+                    // One message: up to 3 lines, like Niagara (23 Oct: 2 lines cut his messages off). More: 2 each.
+                    maxLines = if (lines.size == 1) 3 else 2,
                     overflow = TextOverflow.Ellipsis,
                     style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp, lineHeight = 18.sp, shadow = look.shadow),
                 )
@@ -163,7 +164,7 @@ fun NotificationLine(
         // The ›: opens the full card with every message (and quick reply).
         Box(
             Modifier
-                .size(40.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .clickable(onClick = onExpand),
             contentAlignment = Alignment.Center,
