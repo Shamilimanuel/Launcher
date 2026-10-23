@@ -526,12 +526,16 @@ fun Modifier.glanceFrame(style: GlanceStyle): Modifier {
     val look = LocalLauncherLook.current
     return when (style) {
         GlanceStyle.Plain -> this
+        // Framed styles get a little room above (23 Oct: the pill sat right against the date).
         GlanceStyle.Pill, GlanceStyle.IconsOnly -> this
+            .padding(top = 8.dp, bottom = 2.dp)
             .clip(CircleShape)
             .background(look.panel.copy(alpha = 0.5f))
             .border(1.dp, look.text.copy(alpha = 0.14f), CircleShape)
             .padding(start = 10.dp, end = 14.dp)
         GlanceStyle.Glow -> this
+            // Room for the halo, so it doesn't press against the date above (his 23 Oct screenshot).
+            .padding(top = 10.dp, bottom = 4.dp)
             // A soft halo: three faint rings, drawn once (no blur effect needed, so it costs nothing).
             .drawBehind {
                 fun ring(grow: Dp, alpha: Float) {
@@ -543,9 +547,10 @@ fun Modifier.glanceFrame(style: GlanceStyle): Modifier {
                         cornerRadius = CornerRadius(size.height / 2 + g),
                     )
                 }
-                ring(9.dp, 0.05f)
-                ring(5.dp, 0.09f)
-                ring(2.dp, 0.15f)
+                // Kept tight (it used to reach 9dp out, past the clock's left edge).
+                ring(5.dp, 0.05f)
+                ring(3.dp, 0.09f)
+                ring(1.5.dp, 0.15f)
             }
             .clip(CircleShape)
             .background(look.panel.copy(alpha = 0.5f))
