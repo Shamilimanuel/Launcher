@@ -16,6 +16,7 @@ import com.shamil.launcher.ui.HomeState
 import com.shamil.launcher.ui.theme.LauncherTheme
 import com.shamil.launcher.ui.theme.LookStore
 import com.shamil.launcher.ui.theme.animatedLook
+import com.shamil.launcher.ui.widgets.SeelieWidgetHost
 
 class MainActivity : ComponentActivity() {
     /** What the home screen shows (favourites / list / search). Lives here so pressing Home can reset it. */
@@ -41,6 +42,16 @@ class MainActivity : ComponentActivity() {
                 HomeScreen(state = home, isDefault = isDefault)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        SeelieWidgetHost.start(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        SeelieWidgetHost.stop(this)
     }
 
     override fun onResume() {

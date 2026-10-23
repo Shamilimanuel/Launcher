@@ -20,6 +20,7 @@ import com.shamil.launcher.ui.clock.ClockSettingsContent
 import com.shamil.launcher.ui.search.SearchSettingsContent
 import com.shamil.launcher.ui.clock.ClockStore
 import com.shamil.launcher.ui.widgets.WidgetStackSettingsContent
+import com.shamil.launcher.ui.widgets.AppWidgetPickerContent
 import com.shamil.launcher.ui.widgets.WidgetStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -113,7 +114,7 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, Home, Widgets, Search, Seelie }
+private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, Home, Widgets, WidgetPicker, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -206,7 +207,11 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
                     GroupCard(R.drawable.ic_music_note, Electro, "Music card", "A player that keeps its spot", soon = true)
                 }
                 Page.Widgets -> PageFrame("Home screen", "Widget stack", onBack = ::pop) {
-                    WidgetStackSettingsContent()
+                    WidgetStackSettingsContent(onAddFromApp = { push(Page.WidgetPicker) })
+                }
+                Page.WidgetPicker -> PageFrame("Widget stack", "Add from an app", onBack = ::pop) {
+                    // After adding, back to the stack page, where the new widget sits at the end.
+                    AppWidgetPickerContent(onAdded = ::pop)
                 }
                 Page.Search -> PageFrame("Serenitea", "Search & commands", onBack = ::pop) {
                     SearchSettingsContent()

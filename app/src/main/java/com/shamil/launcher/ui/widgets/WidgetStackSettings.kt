@@ -1,6 +1,7 @@
 package com.shamil.launcher.ui.widgets
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +30,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +55,7 @@ private val SoftRed = Color(0xFFFF9A9A)
  * "Add a widget" cards for the ones not in the stack yet, and the card style.
  */
 @Composable
-fun ColumnScope.WidgetStackSettingsContent() {
+fun ColumnScope.WidgetStackSettingsContent(onAddFromApp: () -> Unit = {}) {
     val context = LocalContext.current
     val store = remember { WidgetStore.get(context) }
     val look = LocalLauncherLook.current
@@ -77,28 +80,36 @@ fun ColumnScope.WidgetStackSettingsContent() {
     }
 
     SectionLabel(if (stack.size == 1) "In your stack · 1 widget" else "In your stack · ${stack.size} widgets")
-    stack.forEachIndexed { index, kind ->
+    stack.forEachIndexed { index, entry ->
         // key: each row stays tied to its widget when the order changes.
-        key(kind.id) {
-            StackRow(
-                kind = kind,
-                canMoveUp = index > 0,
-                canMoveDown = index < stack.lastIndex,
-                onUp = { store.move(index, index - 1) },
-                onDown = { store.move(index, index + 1) },
-                onRemove = { store.remove(kind) },
-            )
+        key(entry.key) {
+            val onUp = { store.move(index, index - 1) }
+            val onDown = { store.move(index, index + 1) }
+            when (entry) {
+                is StackEntry.BuiltIn -> StackRow(
+                    icon = { IconTile(entry.kind.icon, entry.kind.tint) },
+                    title = entry.kind.title, about = entry.kind.about, tint = entry.kind.tint,
+                    canMoveUp = index > 0, canMoveDown = index < stack.lastIndex,
+                    onUp = onUp, onDown = onDown, onRemove = { store.remove(entry) },
+                )
+                is StackEntry.App -> AppStackRow(
+                    entry = entry, store = store,
+                    canMoveUp = index > 0, canMoveDown = index < stack.lastIndex,
+                    onUp = onUp, onDown = onDown,
+                    onRemove = {
+                        store.remove(entry)
+                        SeelieWidgetHost.delete(context, entry.appWidgetId)
+                    },
+                )
+            }
         }
     }
     if (stack.isEmpty()) Hint("Nothing here yet.")
 
     SectionLabel("Add a widget")
-    val notAdded = store.notAdded
-    if (notAdded.isEmpty()) {
-        Hint("Every widget is in your stack. Widgets from your other apps come later.")
-    } else {
-        notAdded.forEach { kind -> key(kind.id) { AddRow(kind) { store.add(kind) } } }
-    }
+    // Real widgets from his other apps (Spotify, Calendar, weather...).
+    AddRow(R.drawable.ic_widgets, look.accent, "From an app…", "Any widget your apps offer, like on a normal home screen", onAddFromApp)
+    store.notAdded.forEach { kind -> key(kind.id) { AddRow(kind.icon, kind.tint, kind.title, kind.about) { store.add(kind) } } }
 
     SectionLabel("Card style")
     Row(Modifier.staggerIn().fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -109,27 +120,69 @@ fun ColumnScope.WidgetStackSettingsContent() {
     Hint("Glass lets the wallpaper shine through, Solid uses the sheet colour, Outline is only a glowing edge.")
 }
 
+/** A widget from another app in his stack: its app's icon and name, ↑ ↓ ✕, and a Small / Medium / Large switch. */
+@Composable
+private fun AppStackRow(
+    entry: StackEntry.App, store: WidgetStore,
+    canMoveUp: Boolean, canMoveDown: Boolean, onUp: () -> Unit, onDown: () -> Unit, onRemove: () -> Unit,
+) {
+    val context = LocalContext.current
+    val look = LocalLauncherLook.current
+    // Android's info about the widget: its name, and its app's icon. Null if the app was uninstalled.
+    val details = remember(entry.appWidgetId) {
+        runCatching {
+            val info = SeelieWidgetHost.manager(context).getAppWidgetInfo(entry.appWidgetId) ?: return@runCatching null
+            val pm = context.packageManager
+            val app = pm.getApplicationInfo(info.provider.packageName, 0)
+            Triple(info.loadLabel(pm), pm.getApplicationLabel(app).toString(), pm.getApplicationIcon(app).toBitmap(96, 96).asImageBitmap())
+        }.getOrNull()
+    }
+    Column(Modifier.padding(bottom = 8.dp)) {
+        StackRow(
+            icon = {
+                if (details != null) Image(details.third, contentDescription = null, modifier = Modifier.size(50.dp))
+                else IconTile(R.drawable.ic_widgets, look.textDim)
+            },
+            title = details?.first ?: "Widget (app removed)",
+            about = details?.let { "From ${it.second}" } ?: "Its app is gone, remove it here",
+            tint = look.accent,
+            canMoveUp = canMoveUp, canMoveDown = canMoveDown, onUp = onUp, onDown = onDown, onRemove = onRemove,
+            bottomGap = false,
+        )
+        // How tall it is on the home screen.
+        Row(Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            WidgetSize.entries.forEach { size ->
+                StyleChip(size.title, selected = store.sizeOf(entry) == size, modifier = Modifier.weight(1f)) { store.resize(entry, size) }
+            }
+        }
+    }
+}
+
 /** A widget in his stack: its tile, name and one line, then ↑ ↓ ✕. */
 @Composable
-private fun StackRow(kind: WidgetKind, canMoveUp: Boolean, canMoveDown: Boolean, onUp: () -> Unit, onDown: () -> Unit, onRemove: () -> Unit) {
+private fun StackRow(
+    icon: @Composable () -> Unit, title: String, about: String, tint: Color,
+    canMoveUp: Boolean, canMoveDown: Boolean, onUp: () -> Unit, onDown: () -> Unit, onRemove: () -> Unit,
+    bottomGap: Boolean = true,
+) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(20.dp)
     Row(
         Modifier
             .staggerIn()
-            .padding(bottom = 8.dp)
+            .padding(bottom = if (bottomGap) 8.dp else 0.dp)
             .fillMaxWidth()
             .clip(shape)
-            .background(Brush.horizontalGradient(listOf(kind.tint.copy(alpha = 0.10f), look.card)))
+            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.10f), look.card)))
             .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile(kind.icon, kind.tint)
+        icon()
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(kind.title, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 16.sp))
-            Text(kind.about, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp, lineHeight = 16.sp))
+            Text(title, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 16.sp))
+            Text(about, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp, lineHeight = 16.sp))
         }
         Spacer(Modifier.width(6.dp))
         // The › arrow turned up and down makes the ↑ / ↓ buttons.
@@ -165,7 +218,7 @@ private fun RoundButton(@DrawableRes icon: Int, label: String, tint: Color, enab
 
 /** A widget he can add: tile, name, one line and a + . Tap anywhere on it to add it at the end of the stack. */
 @Composable
-private fun AddRow(kind: WidgetKind, onAdd: () -> Unit) {
+private fun AddRow(@DrawableRes icon: Int, tint: Color, title: String, about: String, onAdd: () -> Unit) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(20.dp)
     val press = remember { MutableInteractionSource() }
@@ -174,7 +227,7 @@ private fun AddRow(kind: WidgetKind, onAdd: () -> Unit) {
             .staggerIn()
             .padding(bottom = 8.dp)
             .fillMaxWidth()
-            .pressFeel(press, kind.tint, 20.dp)
+            .pressFeel(press, tint, 20.dp)
             .clip(shape)
             .background(look.card)
             .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
@@ -182,11 +235,11 @@ private fun AddRow(kind: WidgetKind, onAdd: () -> Unit) {
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconTile(kind.icon, kind.tint)
+        IconTile(icon, tint)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(kind.title, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 16.sp))
-            Text(kind.about, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp, lineHeight = 16.sp))
+            Text(title, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 16.sp))
+            Text(about, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp, lineHeight = 16.sp))
         }
         Spacer(Modifier.width(8.dp))
         Icon(painterResource(R.drawable.ic_add_circle), contentDescription = "Add", tint = look.accent, modifier = Modifier.size(26.dp))

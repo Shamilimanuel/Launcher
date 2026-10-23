@@ -1,6 +1,7 @@
 package com.shamil.launcher.settings
 
 import android.graphics.Color
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -11,12 +12,18 @@ import com.shamil.launcher.R
 import com.shamil.launcher.ui.theme.LauncherTheme
 import com.shamil.launcher.ui.theme.LookStore
 import com.shamil.launcher.ui.theme.animatedLook
+import com.shamil.launcher.ui.widgets.SeelieWidgetHost
+import com.shamil.launcher.ui.widgets.WidgetSetupResults
 
 /**
  * "Seelie settings" (Serenitea): a window inside Seelie, like Niagara's settings (no icon or task of its own).
  * Picks here change the home screen straight away (one shared [LookStore]).
  */
-class SettingsActivity : ComponentActivity() {
+class SettingsActivity : ComponentActivity(), WidgetSetupResults {
+    // A widget's own setup screen reports back here (see AppWidgetPickerContent).
+    override var onWidgetSetupDone: ((Boolean) -> Unit)? = null
+    override val widgetSetupRequestCode = 4201
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -34,6 +41,27 @@ class SettingsActivity : ComponentActivity() {
                 SettingsApp(looks = looks, onClose = ::finish)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        SeelieWidgetHost.start(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        SeelieWidgetHost.stop(this)
+    }
+
+    @Deprecated("Widget setup screens can only report back this way (Android's AppWidgetHost API).")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == widgetSetupRequestCode) {
+            onWidgetSetupDone?.invoke(resultCode == RESULT_OK)
+            onWidgetSetupDone = null
+            return
+        }
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun finish() {

@@ -57,24 +57,28 @@ fun WidgetStack(modifier: Modifier = Modifier) {
 
     val today = rememberToday()
     val pager = rememberPagerState { store.stack.size }
+    // App widgets can be small, medium or large: the stack's height glides to the widget you're on.
+    val height by animateDpAsState(store.heightOf(store.stack.getOrNull(pager.currentPage)), spring(dampingRatio = 0.85f, stiffness = 400f), label = "stack height")
     Column(modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pager,
-            modifier = Modifier.fillMaxWidth().height(WIDGET_HEIGHT),
+            modifier = Modifier.fillMaxWidth().height(height),
             pageSpacing = 12.dp,
             // Each page is known by its widget, so moving widgets around in settings keeps their state.
-            key = { index -> store.stack.getOrNull(index)?.id ?: index },
+            key = { index -> store.stack.getOrNull(index)?.key ?: index },
         ) { page ->
-            val kind = store.stack.getOrNull(page)
-            if (kind != null) {
-                WidgetCard(store.cardStyle) {
-                    when (kind) {
+            when (val entry = store.stack.getOrNull(page)) {
+                // A real widget from another app draws its own background, so no Seelie card around it.
+                is StackEntry.App -> AppWidgetPage(entry.appWidgetId)
+                is StackEntry.BuiltIn -> WidgetCard(store.cardStyle) {
+                    when (entry.kind) {
                         WidgetKind.MONTH -> MonthWidget(today)
                         WidgetKind.GAUGES -> GaugesWidget()
                         WidgetKind.WEEK -> WeekWidget(today)
                         WidgetKind.NOTES -> NotesWidget(store)
                     }
                 }
+                null -> {}
             }
         }
         // One widget = nothing to flip through, so no dots.
