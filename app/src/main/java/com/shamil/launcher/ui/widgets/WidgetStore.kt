@@ -27,7 +27,7 @@ enum class WidgetKind(val id: String, val title: String, val about: String, @Dra
     }
 }
 
-/** How tall an app widget is in the stack (Seelie's own widgets are always [WIDGET_HEIGHT]). */
+/** How tall an app widget is in the stack (Seelie's own widgets follow the home style, see widgetHeight). */
 enum class WidgetSize(val id: String, val title: String, val height: Dp) {
     SMALL("s", "Small", 110.dp),
     MEDIUM("m", "Medium", 160.dp),
@@ -128,8 +128,8 @@ class WidgetStore private constructor(context: Context) {
 
     fun sizeOf(entry: StackEntry): WidgetSize = (entry as? StackEntry.App)?.let { appSizes[it.appWidgetId] } ?: WidgetSize.MEDIUM
 
-    /** How tall this page of the stack is. */
-    fun heightOf(entry: StackEntry?): Dp = if (entry is StackEntry.App) sizeOf(entry).height else WIDGET_HEIGHT
+    /** How tall this page of the stack is ([builtIn] = how tall Seelie's own widgets are right now). */
+    fun heightOf(entry: StackEntry?, builtIn: Dp): Dp = if (entry is StackEntry.App) sizeOf(entry).height else builtIn
 
     fun resize(entry: StackEntry.App, size: WidgetSize) {
         appSizes = appSizes + (entry.appWidgetId to size)

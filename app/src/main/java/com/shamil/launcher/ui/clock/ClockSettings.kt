@@ -71,7 +71,7 @@ fun ColumnScope.ClockSettingsContent() {
 
     ClockPreview(store, time, is24h)
     Spacer(Modifier.height(4.dp))
-    Hint("Twelve clock styles, and fun styles for the date and the glance line too. All of them follow your theme's colours, accent and font.")
+    Hint("Twelve clock styles and fun date styles. All of them follow your theme's colours, accent and font.")
 
     SectionLabel("Clock")
     TileGrid(ClockStyle.entries) { style, modifier ->
@@ -101,21 +101,7 @@ fun ColumnScope.ClockSettingsContent() {
         }
     }
 
-    // The glance line is wider than half a screen, so these tiles get a whole row each.
-    SectionLabel("Glance line")
-    GlanceStyle.entries.forEach { style ->
-        StyleTile(
-            name = style.label,
-            blurb = null,
-            selected = store.glanceStyle == style,
-            sampleHeight = 46.dp,
-            modifier = Modifier.padding(bottom = 12.dp),
-            onClick = { store.useGlanceStyle(style) },
-        ) {
-            // A little inset, so the Glow halo isn't cut off by the tile's edge.
-            GlanceSample(style, Modifier.padding(start = 10.dp), fontSize = 14.sp)
-        }
-    }
+    Hint("\"Home style\" follows your bundle (Look → Home style), like the weather line under the date. The others are fun faces of their own.")
 }
 
 /** How small each clock is drawn in its tile: two-line styles and the words need a bit more room. */
@@ -232,8 +218,6 @@ private fun ClockPreview(store: ClockStore, time: LocalDateTime, is24h: Boolean)
         ) { (clock, date, glance) ->
             Column {
                 ClockBlock(clock, date, time, is24h, scale = 0.9f)
-                Spacer(Modifier.height(8.dp))
-                GlanceSample(glance, fontSize = 14.sp)
             }
         }
         Text(

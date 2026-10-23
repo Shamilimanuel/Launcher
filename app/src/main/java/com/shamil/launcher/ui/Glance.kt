@@ -31,6 +31,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,8 +56,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.shamil.launcher.R
-import com.shamil.launcher.ui.clock.ClockStore
-import com.shamil.launcher.ui.clock.glanceFrame
+import com.shamil.launcher.ui.home.GlanceLook
+import com.shamil.launcher.ui.home.HomeStyleStore
+import com.shamil.launcher.ui.home.glanceLook
+import com.shamil.launcher.ui.home.homeChip
 import com.shamil.launcher.glance.DeviceStats
 import com.shamil.launcher.glance.Weather
 import com.shamil.launcher.glance.WeatherSource
@@ -112,21 +117,23 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
         state.hasPermission = granted
     }
     // The glance style he picked (Seelie settings → Look → Clock & date): plain, pill, glow or icons only.
-    val glanceStyle = remember { ClockStore.get(context) }.glanceStyle
+    // Its look comes from his home style (Look → Home style): plain, pill or glow, size and colour.
+    val gl = glanceLook(HomeStyleStore.get(context).style, LocalLauncherLook.current)
     // What the line shows: both can be switched off in the "Seelie widget" sheet (long-press beside the clock).
     val home = remember { HomePrefs.get(context) }
     Row(
         modifier
-            .glanceFrame(glanceStyle)
+            .then(if (gl.chip) Modifier.homeChip(LocalLauncherLook.current) else Modifier)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { state.open = !state.open }
-            .padding(vertical = 6.dp),
+            .padding(vertical = if (gl.chip) 0.dp else 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+      CompositionLocalProvider(LocalGlanceLook provides gl) {
         val w = state.weather
         if (home.showWeather) when {
             w != null -> {
                 GlanceIcon(w.icon)
-                GlanceText(if (glanceStyle.showsWords) "${w.temp}° ${w.description}" else "${w.temp}°")
+                GlanceText("${w.temp}° ${w.description}")
                 if (home.showBattery) GlanceDot()
             }
             !state.hasPermission -> {
@@ -156,6 +163,7 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
             GlanceIcon(if (state.stats.charging) R.drawable.ic_bolt else R.drawable.ic_battery_full)
             GlanceText("${state.stats.batteryPercent}%")
         }
+      }
     }
 }
 
@@ -255,21 +263,26 @@ private fun Ring(label: String, percent: Int, sub: String?) {
 
 @Composable
 private fun GlanceIcon(icon: Int) {
-    val look = LocalLauncherLook.current
-    Icon(painterResource(icon), contentDescription = null, tint = look.text, modifier = Modifier.size(18.dp))
+    val gl = LocalGlanceLook.current
+    Icon(painterResource(icon), contentDescription = null, tint = gl.color, modifier = Modifier.size((gl.size.value * 1.2f).dp))
     Spacer(Modifier.width(6.dp))
 }
+
+/** How the glance line looks right now (from his home style), handed to its pieces. */
+private val LocalGlanceLook = staticCompositionLocalOf { GlanceLook(15.sp, Color.White, FontWeight.SemiBold, null, false) }
 
 @Composable
 private fun GlanceText(text: String, modifier: Modifier = Modifier) {
     val look = LocalLauncherLook.current
-    Text(text, modifier = modifier, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 15.sp, shadow = look.shadow))
+    val gl = LocalGlanceLook.current
+    Text(text, modifier = modifier, style = TextStyle(fontFamily = look.font, color = gl.color, fontSize = gl.size, fontWeight = gl.weight, shadow = gl.shadow))
 }
 
 @Composable
 private fun GlanceDot() {
     val look = LocalLauncherLook.current
-    Text("  ·  ", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 15.sp, shadow = look.shadow))
+    val gl = LocalGlanceLook.current
+    Text("  ·  ", style = TextStyle(fontFamily = look.font, color = gl.color, fontSize = gl.size, shadow = gl.shadow))
 }
 
 @Composable

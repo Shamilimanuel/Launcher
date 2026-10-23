@@ -76,6 +76,8 @@ import com.shamil.launcher.apps.rememberAppTweaks
 import com.shamil.launcher.apps.rememberApps
 import com.shamil.launcher.apps.rememberFavourites
 import com.shamil.launcher.ui.widgets.WidgetStack
+import com.shamil.launcher.ui.home.HomeTop
+import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.clock.SeelieClock
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import java.text.Collator
@@ -154,6 +156,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The weather/stats line and its card. The card closes when you tap away, press Back or open the list.
     val glance = rememberGlanceState()
+    // His home style: how the clock, date, glance line and widget card look together (one bundle + tweaks).
+    val homeStyle = HomeStyleStore.get(context).style
     LaunchedEffect(listLetter) { glance.open = false }
 
     // The app whose menu is open (long-press), or null.
@@ -199,8 +203,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                             })
                         }
                 ) {
-                    ClockAndDate(Modifier.padding(start = 48.dp), onLongPress = { widgetSheet = true })
-                    Glance(glance, Modifier.padding(start = 48.dp))
+                    // Clock, date and glance line in his home style (Look → Home style), on one left edge.
+                    ClockAndDate(glance, onLongPress = { widgetSheet = true })
                 }
                 if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
                 Spacer(Modifier.height(12.dp))
@@ -227,7 +231,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     GlanceCard(glance, Modifier.padding(start = 48.dp))
                     // The widget stack: swipe sideways for the next widget. It sits at the top of the favourites
                     // and scrolls away with them, so it never takes space for good. (Pick widgets in Seelie settings.)
-                    WidgetStack(Modifier.padding(start = 32.dp, top = 4.dp, bottom = 8.dp))
+                    // Same left edge as the clock, and the bundle's space above it.
+                    WidgetStack(Modifier.padding(start = homeStyle.edge.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
                     favouriteApps.forEach { app -> AppItem(app) { openMenu(app) } }
                 }
             }
@@ -360,23 +365,26 @@ private fun KeepAliveFade(visible: Boolean, content: @Composable () -> Unit) {
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ClockAndDate(modifier: Modifier = Modifier, onLongPress: () -> Unit = {}) {
+private fun ClockAndDate(glance: GlanceState, onLongPress: () -> Unit = {}) {
     val context = LocalContext.current
     val now = rememberNow()
-    // The clock and date in the styles he picked (Seelie settings → Look → Clock & date). Tap the clock = clock app,
-    // tap the date = calendar, like Niagara.
-    SeelieClock(
+    val noRipple = remember { MutableInteractionSource() }
+    // Tap the clock = clock app, tap the date = calendar, like Niagara. Holding the clock opens the Seelie widget sheet
+    // ("Switch Home app" is in there, the old escape hatch).
+    HomeTop(
         time = now,
-        is24h = DateFormat.is24HourFormat(context),
-        onClockClick = { openSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
-        // Holding the clock opens the Seelie widget sheet too ("Switch Home app" is in there, the old escape hatch).
-        onClockLongClick = onLongPress,
-        onDateClick = {
+        glance = glance,
+        clockModifier = Modifier.combinedClickable(
+            interactionSource = noRipple,
+            indication = null,
+            onClick = { openSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
+            onLongClick = onLongPress,
+        ),
+        dateModifier = Modifier.clickable(interactionSource = noRipple, indication = null) {
             val today = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
             ContentUris.appendId(today, System.currentTimeMillis())
             openSafely(context, Intent(Intent.ACTION_VIEW, today.build()))
         },
-        modifier = modifier,
     )
 }
 

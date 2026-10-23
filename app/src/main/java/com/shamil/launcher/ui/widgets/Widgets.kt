@@ -58,6 +58,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.shamil.launcher.R
+import com.shamil.launcher.ui.home.HomeStyleStore
+import com.shamil.launcher.ui.home.HomeStyle
+import androidx.compose.ui.graphics.lerp
 import com.shamil.launcher.glance.DeviceStats
 import com.shamil.launcher.settings.pressFeel
 import com.shamil.launcher.ui.theme.Cinzel
@@ -73,11 +76,24 @@ import java.time.format.TextStyle as DateStyle
 
 /*
  * The widgets of the stack. Each one fills a rounded card (see [WidgetCard]) that the stack sizes:
- * full width, [WIDGET_HEIGHT] tall.
+ * full width, as tall as widgetHeight() says for his home style.
  */
 
-/** How tall every widget card is. */
-val WIDGET_HEIGHT: Dp = 160.dp
+/** How tall Seelie's own widgets are, from his home style: full or compact, a little taller inside a visible card. */
+fun widgetHeight(style: HomeStyle): Dp = when {
+    style.cardSize == "compact" -> if (style.cardVisible) 100.dp else 92.dp
+    else -> if (style.cardVisible) 164.dp else 138.dp
+}
+
+/** The gold of the Gold bundle (headings, rings, "today"). */
+private val GoldHi = Color(0xFFF3D79C)
+
+/** Heading + ring colour inside the widgets (the theme's accent, or gold), set by [WidgetCard] from the home style. */
+private val LocalWidgetAccent = staticCompositionLocalOf { Color.White }
+/** The fill of the "today" circle, set by [WidgetCard]. */
+private val LocalTodayFill = staticCompositionLocalOf { Color.White }
+/** Compact widgets: fewer rows, smaller rings. */
+private val LocalCompact = staticCompositionLocalOf { false }
 
 /** Sundays in pink, like his Samsung lock screen calendar. */
 private val SundayPink = Color(0xFFFF8CA8)
@@ -87,32 +103,53 @@ private val Ink = Color(0xFF171C29)
 /** Text on the Outline style sits right on the wallpaper, so it gets the soft shadow; on Glass/Solid it doesn't need it. */
 private val LocalWidgetShadow = staticCompositionLocalOf<Shadow?> { null }
 
-/** The rounded card around one widget, drawn in his chosen [CardStyle]. */
+/**
+ * The card around one widget, drawn from his home style (23 Oct bundles): no card, glass, solid or outline, how see-through
+ * it is (0% = fully transparent), its corner rounding and border. When the card is (almost) see-through, the text gets the
+ * wallpaper shadow so it stays readable.
+ */
 @Composable
-internal fun WidgetCard(style: CardStyle, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+internal fun WidgetCard(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     val look = LocalLauncherLook.current
-    val shape = RoundedCornerShape(24.dp)
-    val card = when (style) {
-        // Glass: the see-through panel colour of the search button, a faint light edge and a soft shine at the top.
-        CardStyle.GLASS -> Modifier
-            .background(look.panel, shape)
-            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.07f), Color.Transparent)), shape)
-            .border(1.dp, Color.White.copy(alpha = 0.09f), shape)
-        // Solid: the (almost opaque) colour of the sheets.
-        CardStyle.SOLID -> Modifier
-            .background(Brush.verticalGradient(listOf(look.sheetTop, look.sheet)), shape)
-            .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
-        // Outline: hollow, only a glowing edge in the accent colour.
-        CardStyle.OUTLINE -> Modifier
-            .border(1.5.dp, look.accent.copy(alpha = 0.55f), shape)
+    val hs = HomeStyleStore.get(LocalContext.current).style
+    val none = hs.cardStyle == "none"
+    val opacity = if (none) 0f else hs.cardOpacity / 100f
+    val visible = hs.cardVisible
+    val shape = RoundedCornerShape(if (none) 0.dp else hs.cardRadius.dp)
+    val fill: Brush = when (hs.cardStyle) {
+        // Glass: the theme's see-through panel colour, with a soft shine at the top.
+        "glass" -> Brush.verticalGradient(listOf(lerp(look.panel, Color.White, 0.06f).copy(alpha = opacity), look.panel.copy(alpha = opacity)))
+        // Solid: the sheet colours.
+        "solid" -> Brush.verticalGradient(listOf(look.sheetTop.copy(alpha = opacity), look.sheet.copy(alpha = opacity)))
+        // Outline: a deep night fill behind a glowing edge.
+        "outline" -> Brush.verticalGradient(listOf(Color(0xFF0E1126).copy(alpha = opacity), Color(0xFF0E1126).copy(alpha = opacity)))
+        else -> Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent))
     }
-    CompositionLocalProvider(LocalWidgetShadow provides if (style == CardStyle.OUTLINE) look.shadow else null) {
+    val gold = hs.cardAccent == "gold"
+    val borderColor = when {
+        hs.cardStyle == "outline" -> if (gold) Color(0xFFD3BC8E).copy(alpha = 0.8f) else look.accent.copy(alpha = 0.7f)
+        hs.spirit -> look.accent.copy(alpha = 0.45f)
+        else -> Color.White.copy(alpha = 0.17f)
+    }
+    val accent = if (gold) GoldHi else look.accent
+    val today = when (hs.cardToday) { "gold" -> GoldHi; "accent" -> look.accent; else -> Color.White }
+    CompositionLocalProvider(
+        LocalWidgetShadow provides if (opacity < 0.5f) look.shadow else null,
+        LocalWidgetAccent provides accent,
+        LocalTodayFill provides today,
+        LocalCompact provides (hs.cardSize == "compact"),
+    ) {
         Box(
             modifier
                 .fillMaxSize()
                 .clip(shape)
-                .then(card)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .background(fill, shape)
+                .then(if (!none && hs.cardBorder) Modifier.border(1.dp, borderColor, shape) else Modifier)
+                // Inside a visible card the content sits in from the edge; without one it lines up with the clock.
+                .padding(
+                    start = if (visible) 14.dp else 0.dp, end = if (visible) 14.dp else 0.dp,
+                    top = if (visible) 15.dp else 0.dp, bottom = if (visible) 12.dp else 0.dp,
+                ),
             content = content,
         )
     }
@@ -144,7 +181,7 @@ private fun WidgetLabel(text: String) {
     Text(
         text.uppercase(), maxLines = 1, overflow = TextOverflow.Ellipsis,
         style = TextStyle(
-            fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent.copy(alpha = 0.9f),
+            fontFamily = look.font, fontWeight = FontWeight.Bold, color = LocalWidgetAccent.current.copy(alpha = 0.9f),
             fontSize = 10.sp, letterSpacing = 2.2.sp, shadow = LocalWidgetShadow.current,
         ),
     )
@@ -153,67 +190,67 @@ private fun WidgetLabel(text: String) {
 /* ---------------- Month calendar ---------------- */
 
 /**
- * The month, like his Samsung lock screen: the year, the month's name big in Cinzel and today's day on the left;
- * on the right the grid, Monday first, Sundays pink, other months' days dimmed, today = a white circle.
+ * The month, like his Samsung lock screen: a small header ("OKT 2026") and the grid, Monday first, Sundays pink,
+ * other months' days left out, today a filled circle. The full date is already under the clock, so it isn't repeated
+ * (23 Oct bundles). Compact: only this week and the next.
  */
 @Composable
 internal fun MonthWidget(today: LocalDate) {
     val look = LocalLauncherLook.current
     val locale = Locale.getDefault()
-    Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            WText("${today.year}", 11.sp, look.accent, weight = FontWeight.Bold)
-            // "okt." → "OKT": the short month name, without the dot some languages add.
+    val compact = LocalCompact.current
+    Column(Modifier.fillMaxSize()) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            // "okt." -> "OKT": the short month name, without the dot some languages add.
             val month = today.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.').uppercase(locale)
-            Text(
-                month, maxLines = 1,
-                style = TextStyle(
-                    fontFamily = Cinzel, fontWeight = FontWeight.Medium, color = look.text, fontSize = 30.sp,
-                    letterSpacing = 1.5.sp, shadow = LocalWidgetShadow.current,
-                ),
-            )
-            val day = today.dayOfWeek.getDisplayName(DateStyle.FULL, locale).replaceFirstChar { it.titlecase(locale) }
-            WText("$day ${today.dayOfMonth}", 12.sp, look.textDim)
+            Text(month, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.ExtraBold, color = LocalWidgetAccent.current,
+                fontSize = if (compact) 11.5.sp else 13.sp, letterSpacing = 2.sp, shadow = LocalWidgetShadow.current))
+            Spacer(Modifier.width(6.dp))
+            WText("${today.year}", if (compact) 11.sp else 12.sp, look.textDim, weight = FontWeight.SemiBold)
         }
-        Spacer(Modifier.width(8.dp))
-        MonthGrid(today, locale)
+        Spacer(Modifier.height(if (compact) 3.dp else 5.dp))
+        MonthGrid(today, locale, compact)
     }
 }
 
 @Composable
-private fun MonthGrid(today: LocalDate, locale: Locale) {
+private fun MonthGrid(today: LocalDate, locale: Locale, compact: Boolean) {
     val look = LocalLauncherLook.current
-    val cellW = 25.dp
-    val cellH = 18.dp
-    // The grid starts on the Monday on or before the 1st, and has as many weeks as the month needs (4–6).
+    val cellH = if (compact) 15.dp else 17.dp
+    // The grid starts on the Monday on or before the 1st, and has as many weeks as the month needs (4-6).
     val first = today.withDayOfMonth(1)
-    val lead = first.dayOfWeek.value - 1   // Monday = 1 in java.time, so this is how many days of last month show
+    val lead = first.dayOfWeek.value - 1   // Monday = 1 in java.time, so this is how many days of last month there are
     val weeks = (lead + today.lengthOfMonth() + 6) / 7
     val start = first.minusDays(lead.toLong())
-    Column {
+    // Compact: just the week with today in it and the one after.
+    val todayWeek = ((today.toEpochDay() - start.toEpochDay()) / 7).toInt()
+    val shownWeeks = if (compact) (todayWeek..minOf(todayWeek + 1, weeks - 1)) else (0 until weeks)
+    Column(Modifier.fillMaxWidth()) {
         // Day letters in his phone's language (Dutch: M D W D V Z Z).
-        Row {
+        Row(Modifier.fillMaxWidth()) {
             for (d in 1..7) {
                 val letter = DayOfWeek.of(d).getDisplayName(DateStyle.NARROW, locale).uppercase(locale)
-                Box(Modifier.size(cellW, cellH), contentAlignment = Alignment.Center) {
-                    WText(letter, 10.sp, if (d == 7) SundayPink else look.textDim, weight = FontWeight.Bold)
+                Box(Modifier.weight(1f).height(cellH), contentAlignment = Alignment.Center) {
+                    WText(letter, if (compact) 9.5.sp else 10.5.sp, if (d == 7) SundayPink else look.textDim, weight = FontWeight.Bold)
                 }
             }
         }
-        for (w in 0 until weeks) {
-            Row {
+        for (w in shownWeeks) {
+            Row(Modifier.fillMaxWidth()) {
                 for (d in 0 until 7) {
                     val date = start.plusDays((w * 7 + d).toLong())
-                    val thisMonth = date.month == today.month
-                    Box(Modifier.size(cellW, cellH), contentAlignment = Alignment.Center) {
-                        if (date == today) {
-                            // Today: a filled white circle with a dark number.
-                            Box(Modifier.size(17.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
-                                Text("${date.dayOfMonth}", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = Ink, fontSize = 10.sp))
+                    Box(Modifier.weight(1f).height(cellH), contentAlignment = Alignment.Center) {
+                        when {
+                            date.month != today.month -> {}   // other months' days: left out, so the month reads cleanly
+                            date == today -> Box(
+                                Modifier.size(if (compact) 18.dp else 20.dp).background(LocalTodayFill.current, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("${date.dayOfMonth}", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = Ink,
+                                    fontSize = if (compact) 11.sp else 12.sp))
                             }
-                        } else {
-                            val base = if (d == 6) SundayPink else look.text
-                            WText("${date.dayOfMonth}", 10.sp, if (thisMonth) base else base.copy(alpha = 0.35f))
+                            else -> WText("${date.dayOfMonth}", if (compact) 11.5.sp else 12.5.sp,
+                                if (d == 6) SundayPink else look.text, weight = FontWeight.Bold)
                         }
                     }
                 }
@@ -273,10 +310,12 @@ private fun Gauge(fill: Float, value: String, label: String) {
     var target by remember { mutableStateOf(0f) }
     LaunchedEffect(fill) { target = fill.coerceIn(0f, 1f) }
     val shown by animateFloatAsState(target, tween(700), label = "gauge")
+    val ringColor = LocalWidgetAccent.current
+    val compact = LocalCompact.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
-                .size(70.dp)
+                .size(if (compact) 50.dp else 70.dp)
                 .drawBehind {
                     drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f))))
                     val stroke = 5.dp.toPx()
@@ -286,15 +325,15 @@ private fun Gauge(fill: Float, value: String, label: String) {
                     // 270° of ring, starting bottom-left (135°) and going clockwise to bottom-right.
                     drawArc(look.text.copy(alpha = 0.14f), 135f, 270f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                     if (shown > 0.005f) {
-                        drawArc(look.accent, 135f, 270f * shown, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+                        drawArc(ringColor, 135f, 270f * shown, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
                     }
                 },
             contentAlignment = Alignment.Center,
         ) {
-            WText(value, 15.sp, look.text, weight = FontWeight.Bold)
+            WText(value, if (compact) 12.sp else 15.sp, look.text, weight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(6.dp))
-        WText(label, 11.sp, look.textDim)
+        Spacer(Modifier.height(if (compact) 2.dp else 6.dp))
+        WText(label, if (compact) 9.5.sp else 11.sp, look.textDim)
     }
 }
 
@@ -321,8 +360,8 @@ internal fun WeekWidget(today: LocalDate) {
                     Spacer(Modifier.height(6.dp))
                     Box(
                         Modifier
-                            .size(34.dp)
-                            .then(if (isToday) Modifier.background(look.accent, CircleShape) else Modifier),
+                            .size(if (LocalCompact.current) 26.dp else 34.dp)
+                            .then(if (isToday) Modifier.background(LocalTodayFill.current, CircleShape) else Modifier),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (isToday) {
@@ -335,7 +374,7 @@ internal fun WeekWidget(today: LocalDate) {
                     // Under the 1st of a month: the month's short name, so a new month is easy to spot.
                     WText(
                         if (date.dayOfMonth == 1) date.month.getDisplayName(DateStyle.SHORT, locale).trimEnd('.') else " ",
-                        10.sp, look.accent,
+                        10.sp, LocalWidgetAccent.current,
                     )
                 }
             }
@@ -369,10 +408,10 @@ internal fun NotesWidget(store: WidgetStore) {
                 WText("Tap to write a note", 15.sp, look.textDim)
             }
         } else {
-            lines.take(3).forEach { line ->
+            lines.take(if (LocalCompact.current) 2 else 3).forEach { line ->
                 Row(Modifier.padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                     // A small hollow circle in the accent, like a to-do bullet.
-                    Box(Modifier.size(12.dp).border(1.5.dp, look.accent, CircleShape))
+                    Box(Modifier.size(12.dp).border(1.5.dp, LocalWidgetAccent.current, CircleShape))
                     Spacer(Modifier.width(10.dp))
                     WText(line, 15.sp, look.text)
                 }

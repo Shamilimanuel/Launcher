@@ -66,6 +66,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.shamil.launcher.R
+import com.shamil.launcher.ui.home.BundleClock
+import com.shamil.launcher.ui.home.BundleDate
 import com.shamil.launcher.ui.theme.Cinzel
 import com.shamil.launcher.ui.theme.CormorantGaramond
 import com.shamil.launcher.ui.theme.Fredoka
@@ -91,7 +93,7 @@ import kotlin.math.sin
 
 /** One clock style. [id] is what gets saved, so never rename it. */
 enum class ClockStyle(val id: String, val label: String, val blurb: String) {
-    Classic("classic", "Classic", "Plain, like today"),
+    Classic("classic", "Home style", "Follows your bundle"),
     Thin("thin", "Thin", "Light and airy"),
     Bold("bold", "Bold", "Heavy and loud"),
     Stacked("stacked", "Stacked", "Two lines"),
@@ -112,7 +114,7 @@ enum class ClockStyle(val id: String, val label: String, val blurb: String) {
 
 /** One date style. [id] is what gets saved, so never rename it. */
 enum class DateStyle(val id: String, val label: String) {
-    Plain("plain", "Plain"),
+    Plain("plain", "Home style"),
     Capitals("caps", "Capitals"),
     Long("long", "Long"),
     Pill("pill", "Pill"),
@@ -258,8 +260,8 @@ fun ClockFace(style: ClockStyle, time: LocalDateTime, is24h: Boolean, modifier: 
     val hhmm = "$hh:$mm"
 
     when (style) {
-        ClockStyle.Classic -> ClockText(hhmm, modifier, TextStyle(
-            fontFamily = look.font, fontWeight = look.clockWeight, color = look.text, fontSize = size(1f), shadow = look.shadow))
+        // "Home style": the clock his bundle describes (font, size, weight, colour; Look → Home style).
+        ClockStyle.Classic -> BundleClock(time, is24h, modifier, scale)
 
         ClockStyle.Thin -> ClockText(hhmm, modifier, TextStyle(
             fontFamily = SystemLight, color = look.text, fontSize = size(1.12f), letterSpacing = (-0.01).em, shadow = look.shadow))
@@ -481,7 +483,8 @@ fun DateFace(style: DateStyle, time: LocalDateTime, modifier: Modifier = Modifie
     val plain = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = (17 * scale).sp, shadow = look.shadow)
 
     when (style) {
-        DateStyle.Plain -> Text(format("EEE d MMM"), modifier, style = plain, softWrap = false, maxLines = 1)
+        // "Home style": the date his bundle describes (plain, capitals or pill; Look → Home style).
+        DateStyle.Plain -> BundleDate(time, modifier, scale)
 
         DateStyle.Capitals -> Text(format("EEE d MMM").uppercase(locale), modifier, softWrap = false, maxLines = 1,
             style = plain.copy(fontSize = (14.5f * scale).sp, letterSpacing = 0.2.em))

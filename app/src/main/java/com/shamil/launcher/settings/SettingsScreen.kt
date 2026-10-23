@@ -23,6 +23,7 @@ import com.shamil.launcher.apps.SeelieIcons
 import com.shamil.launcher.ui.clock.ClockSettingsContent
 import com.shamil.launcher.ui.search.SearchSettingsContent
 import com.shamil.launcher.ui.clock.ClockStore
+import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.widgets.WidgetStackSettingsContent
 import com.shamil.launcher.ui.widgets.AppWidgetPickerContent
 import com.shamil.launcher.ui.widgets.WidgetStore
@@ -118,7 +119,7 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, Home, Widgets, WidgetPicker, Search, Seelie }
+private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -144,6 +145,7 @@ private class SettingHit(
 }
 
 private val SETTINGS_INDEX = listOf(
+    SettingHit("Home style (bundles)", "Look", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_home_filled, Electro, "home style bundle bundles glass floating gold minimal spirit transparent see-through doorzichtig card kaart spacing edge"),
     SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
     SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
     SettingHit("Icon pack and style", "Look", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "icons iconen pack darko themed glass pictogram"),
@@ -267,6 +269,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     GroupCard(R.drawable.ic_settings, look.accent, "Seelie", "Default home app, version") { push(Page.Seelie) }
                 }
                 Page.Look -> PageFrame("Serenitea", "Look", onBack = ::pop, preview = true) {
+                    // The bundles: clock, date, the line under it and the widget card as one matching set.
+                    val homeStyle = HomeStyleStore.get(LocalContext.current)
+                    GroupCard(R.drawable.ic_home_filled, Electro, "Home style", homeStyle.bundle.title + if (homeStyle.isCustom) " · custom" else "") { push(Page.HomeStyle) }
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
                     GroupCard(R.drawable.ic_schedule, Geo, "Clock & date", ClockStore.get(LocalContext.current).clockStyle.label) { push(Page.Clock) }
@@ -291,6 +296,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 }
                 Page.Icons -> PageFrame("Look", "Icons", onBack = ::pop) {
                     IconsPage(looks)
+                }
+                Page.HomeStyle -> PageFrame("Look", "Home style", onBack = ::pop) {
+                    HomeStyleSettingsContent()
                 }
                 Page.Clock -> PageFrame("Look", "Clock & date", onBack = ::pop) {
                     ClockSettingsContent()

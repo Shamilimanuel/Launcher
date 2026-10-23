@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,7 +59,8 @@ fun WidgetStack(modifier: Modifier = Modifier) {
     val today = rememberToday()
     val pager = rememberPagerState { store.stack.size }
     // App widgets can be small, medium or large: the stack's height glides to the widget you're on.
-    val height by animateDpAsState(store.heightOf(store.stack.getOrNull(pager.currentPage)), spring(dampingRatio = 0.85f, stiffness = 400f), label = "stack height")
+    val builtIn = widgetHeight(HomeStyleStore.get(context).style)
+    val height by animateDpAsState(store.heightOf(store.stack.getOrNull(pager.currentPage), builtIn), spring(dampingRatio = 0.85f, stiffness = 400f), label = "stack height")
     Column(modifier.fillMaxWidth()) {
         HorizontalPager(
             state = pager,
@@ -70,7 +72,7 @@ fun WidgetStack(modifier: Modifier = Modifier) {
             when (val entry = store.stack.getOrNull(page)) {
                 // A real widget from another app draws its own background, so no Seelie card around it.
                 is StackEntry.App -> AppWidgetPage(entry.appWidgetId)
-                is StackEntry.BuiltIn -> WidgetCard(store.cardStyle) {
+                is StackEntry.BuiltIn -> WidgetCard {
                     when (entry.kind) {
                         WidgetKind.MONTH -> MonthWidget(today)
                         WidgetKind.GAUGES -> GaugesWidget()
