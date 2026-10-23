@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -172,7 +173,7 @@ private fun PasswordSetup(onDone: () -> Unit) {
 
 /** Unlock with the password (+ fingerprint, which pops up by itself when it's on). */
 @Composable
-private fun PasswordUnlock(vault: VaultStore) {
+private fun PasswordUnlock(vault: VaultStore, title: String = "Vault") {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -180,15 +181,15 @@ private fun PasswordUnlock(vault: VaultStore) {
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
-    LaunchedEffect(Unit) { if (canFinger) askFingerprint(context, vault) }
+    LaunchedEffect(Unit) { if (canFinger) askFingerprint(context, vault, title) }
     PasswordLayout(
-        title = "Vault",
+        title = title,
         sub = message ?: "Type your password",
         value = entry,
         onValue = { entry = it; message = null },
         canSubmit = entry.isNotEmpty(),
         offset = shake.value,
-        onFinger = if (canFinger) ({ askFingerprint(context, vault) }) else null,
+        onFinger = if (canFinger) ({ askFingerprint(context, vault, title) }) else null,
         onSubmit = {
             if (SystemClock.uptimeMillis() < vault.lockedUntil) {
                 message = "Too many tries. Wait a moment."
@@ -259,6 +260,33 @@ private fun PasswordLayout(
     }
 }
 
+/**
+ * The code screen for a locked app (or its notifications), over everything. The right code (or fingerprint) opens it;
+ * back or ✕ cancels. It never leaves the vault open: it locks again right after.
+ */
+@Composable
+fun LockGate(label: String) {
+    val context = LocalContext.current
+    val vault = remember { VaultStore.get(context) }
+    val look = LocalLauncherLook.current
+    BackHandler { vault.cancelPending() }
+    // The code was right: open the app (once).
+    LaunchedEffect(vault.unlocked) { if (vault.unlocked) vault.finishPending() }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(look.sheetTop.copy(alpha = 0.97f), look.sheet.copy(alpha = 0.99f))))
+            .clickable(remember { MutableInteractionSource() }, null) {}
+    ) {
+        if (vault.passwordMode) PasswordUnlock(vault, label) else PinPad(vault, label)
+        Box(
+            Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape)
+                .clickable { vault.cancelPending() },
+            contentAlignment = Alignment.Center,
+        ) { Text("✕", style = TextStyle(color = look.textDim, fontSize = 20.sp)) }
+    }
+}
+
 /** Make a number PIN on the round pad: 4–6 digits, then again. */
 @Composable
 private fun NumberSetup(onDone: () -> Unit) {
@@ -288,7 +316,7 @@ private fun NumberSetup(onDone: () -> Unit) {
 
 /** The PIN pad (+ fingerprint, which pops up by itself when it's on). */
 @Composable
-private fun PinPad(vault: VaultStore) {
+private fun PinPad(vault: VaultStore, title: String = "Vault") {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -296,7 +324,7 @@ private fun PinPad(vault: VaultStore) {
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
-    fun askFinger() = askFingerprint(context, vault)
+    fun askFinger() = askFingerprint(context, vault, title)
     LaunchedEffect(Unit) { if (canFinger) askFinger() }
 
     fun check() {
@@ -317,7 +345,7 @@ private fun PinPad(vault: VaultStore) {
     }
 
     PadLayout(
-        title = "Vault",
+        title = title,
         sub = message ?: "Type your PIN",
         entry = entry,
         maxDigits = 6,
@@ -334,12 +362,12 @@ private fun PinPad(vault: VaultStore) {
 }
 
 /** Android's fingerprint prompt; success unlocks the vault ("Use code" closes it, back to typing). */
-private fun askFingerprint(context: android.content.Context, vault: VaultStore) {
+private fun askFingerprint(context: android.content.Context, vault: VaultStore, title: String = "Vault") {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
     val executor = context.mainExecutor
     runCatching {
         BiometricPrompt.Builder(context)
-            .setTitle("Open your vault")
+            .setTitle(if (title == "Vault") "Open your vault" else "Open $title")
             .setNegativeButton("Use code", executor) { _, _ -> }
             .build()
             .authenticate(CancellationSignal(), executor, object : BiometricPrompt.AuthenticationCallback() {

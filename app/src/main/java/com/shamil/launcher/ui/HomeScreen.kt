@@ -353,6 +353,12 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         AnimatedVisibility(visible = vaultOpen, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
             VaultScreen(allApps = apps, onClose = { vaultOpen = false })
         }
+        // A locked app asking for the code (from a tap, search, a gesture, a shortcut or a notification).
+        AnimatedVisibility(visible = vault.pending != null, enter = fadeIn(tween(200)), exit = fadeOut(tween(160))) {
+            var label by remember { mutableStateOf("") }
+            vault.pending?.first?.let { label = it }
+            LockGate(label)
+        }
 
         if (!state.searching && !state.editingFavourites && !vaultOpen) {
             LetterRail(
@@ -410,6 +416,14 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 // First time: open the vault so he makes his PIN right away.
                 if (!vault.hasPin) vaultOpen = true
                 else Toast.makeText(context, "${app.label} is in the vault · hold • to open it", Toast.LENGTH_SHORT).show()
+            },
+            isLocked = vault.isLocked(pkg),
+            onToggleLock = {
+                val on = !vault.isLocked(pkg)
+                vault.setLocked(pkg, on)
+                // No code yet: make one first (the vault's setup screen).
+                if (on && !vault.hasPin) vaultOpen = true
+                else Toast.makeText(context, if (on) "${app.label} is locked" else "${app.label} is unlocked", Toast.LENGTH_SHORT).show()
             },
         )
     }

@@ -293,6 +293,12 @@ fun AppRow(
             style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp, shadow = look.shadow),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
+        // A locked app (asks for the code when opened): a small lock after its name.
+        if (remember { com.shamil.launcher.apps.VaultStore.get(context) }.isLocked(app.component.packageName)) {
+            Spacer(Modifier.width(8.dp))
+            Icon(painterResource(com.shamil.launcher.R.drawable.ic_lock), "Locked", tint = look.textDim, modifier = Modifier.size(15.dp))
+        }
     }
 }

@@ -144,7 +144,11 @@ object Apps {
     private fun String.simplified() =
         Normalizer.normalize(this, Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "").lowercase()
 
-    fun launch(context: Context, app: AppEntry) {
+    /** Opens [app]; a locked one asks for the code first (see [VaultStore.guard]). */
+    fun launch(context: Context, app: AppEntry) =
+        VaultStore.get(context).guard(app.component.packageName, app.label) { launchNow(context, app) }
+
+    private fun launchNow(context: Context, app: AppEntry) {
         try {
             context.getSystemService(LauncherApps::class.java)
                 .startMainActivity(app.component, app.user, null, null)
@@ -188,7 +192,10 @@ object Apps {
             }
     }
 
-    fun openShortcut(context: Context, shortcut: AppShortcut) {
+    fun openShortcut(context: Context, shortcut: AppShortcut) =
+        VaultStore.get(context).guard(shortcut.info.`package`, shortcut.label) { openShortcutNow(context, shortcut) }
+
+    private fun openShortcutNow(context: Context, shortcut: AppShortcut) {
         try {
             context.getSystemService(LauncherApps::class.java).startShortcut(shortcut.info, null, null)
         } catch (e: Exception) {

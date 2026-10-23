@@ -46,6 +46,43 @@ class VaultStore private constructor(context: Context) {
 
     operator fun contains(packageName: String) = packageName in apps
 
+    /**
+     * Locked apps (his idea, 23 Oct): they stay in the list and favourites, but opening one asks for the code first.
+     * Same code and fingerprint as the vault.
+     */
+    var locked by mutableStateOf(prefs.getStringSet(KEY_LOCKED, emptySet())?.toSet() ?: emptySet())
+        private set
+    fun isLocked(packageName: String) = packageName in locked
+    fun setLocked(packageName: String, on: Boolean) {
+        locked = if (on) locked + packageName else locked - packageName
+        prefs.edit { putStringSet(KEY_LOCKED, locked) }
+    }
+
+    /** A locked app waiting for the code: its name (for the screen) and what to do once the code is right. */
+    var pending by mutableStateOf<Pair<String, () -> Unit>?>(null)
+        private set
+
+    /**
+     * Runs [open] straight away, or (for a locked app) first asks for the code. Every way an app opens goes through here:
+     * a tap, search, a gesture, a shortcut, a notification.
+     */
+    fun guard(packageName: String, label: String, open: () -> Unit) {
+        if (packageName !in locked || !hasPin || unlocked) open() else pending = label to open
+    }
+
+    /** The code was right: open the waiting app, and lock again straight after. */
+    fun finishPending() {
+        val action = pending?.second
+        pending = null
+        unlocked = false
+        action?.invoke()
+    }
+
+    fun cancelPending() {
+        pending = null
+        unlocked = false
+    }
+
     fun add(packageName: String) = saveApps(apps + packageName)
     fun remove(packageName: String) = saveApps(apps - packageName)
 
@@ -109,6 +146,7 @@ class VaultStore private constructor(context: Context) {
 
     companion object {
         private const val KEY_APPS = "apps"
+        private const val KEY_LOCKED = "locked_apps"
         private const val KEY_HASH = "pin_hash"
         private const val KEY_SALT = "pin_salt"
         private const val KEY_FINGER = "fingerprint"

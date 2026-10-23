@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationCompat
 import androidx.core.graphics.drawable.toBitmap
+import com.shamil.launcher.apps.VaultStore
 import com.shamil.launcher.notify.NotifyHub
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -281,7 +282,14 @@ object NotifActions {
      * Opens what the notification points to (the chat, the video), like tapping it in the shade.
      * Falls back to just opening the app. Returns false if nothing could be opened.
      */
-    fun open(context: Context, notif: AppNotif): Boolean {
+    fun open(context: Context, notif: AppNotif) {
+        val label = runCatching {
+            context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(notif.packageName, 0)).toString()
+        }.getOrDefault("This app")
+        VaultStore.get(context).guard(notif.packageName, label) { openNow(context, notif) }
+    }
+
+    private fun openNow(context: Context, notif: AppNotif): Boolean {
         val opened = notif.contentIntent?.let { pi ->
             try {
                 pi.send(context, 0, null, null, null, null, startOptions())

@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
+import com.shamil.launcher.apps.VaultStore
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.ui.ROW_START
@@ -125,7 +126,11 @@ fun NotificationLine(
     val look = LocalLauncherLook.current
     val context = LocalContext.current
     val prefs = remember { NotifPrefs.get(context) }
-    val showText = prefs.showText
+    val vault = remember { VaultStore.get(context) }
+    // A locked app never shows its messages on the home screen; opening them asks for the code.
+    val locked = vault.isLocked(packageName)
+    val showText = prefs.showText && !locked
+    val expand = { if (locked) vault.guard(packageName, "Notifications", onExpand) else onExpand() }
     val now by rememberNow()
     val age = if (showAge) ago(newest.postTime, now) else null
 
@@ -167,7 +172,7 @@ fun NotificationLine(
             Modifier
                 .size(34.dp)
                 .clip(CircleShape)
-                .clickable(onClick = onExpand),
+                .clickable(onClick = expand),
             contentAlignment = Alignment.Center,
         ) {
             Text("›", style = TextStyle(color = look.text, fontSize = 24.sp, shadow = look.shadow))

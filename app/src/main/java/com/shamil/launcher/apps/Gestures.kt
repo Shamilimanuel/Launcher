@@ -88,8 +88,10 @@ class GestureStore private constructor(context: Context) {
                 }
                 is SwipeAction.OpenApp -> {
                     val component = ComponentName.unflattenFromString(action.component) ?: return false
-                    context.getSystemService(LauncherApps::class.java).startMainActivity(component, Process.myUserHandle(), null, null)
-                    LaunchStats.get(context).record(component.packageName)
+                    VaultStore.get(context).guard(component.packageName, app.label) {
+                        runCatching { context.getSystemService(LauncherApps::class.java).startMainActivity(component, Process.myUserHandle(), null, null) }
+                        LaunchStats.get(context).record(component.packageName)
+                    }
                     true
                 }
             }

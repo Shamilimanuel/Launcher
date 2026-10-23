@@ -87,6 +87,9 @@ fun AppMenuSheet(
     onSwipeLeft: () -> Unit = {},
     /** Puts the app in the PIN vault. */
     onMoveToVault: () -> Unit = {},
+    /** Locks or unlocks the app (stays visible, asks the code to open). */
+    isLocked: Boolean = false,
+    onToggleLock: () -> Unit = {},
 ) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
@@ -150,6 +153,8 @@ fun AppMenuSheet(
                 if (isHidden) "Show in app list" else "Hide from app list",
                 if (isHidden) "Back in the A–Z" else "Find it again under the •",
             ) { closeThen(onToggleHidden) }
+            Card(R.drawable.ic_lock, if (isLocked) "Unlock" else "Lock with code",
+                if (isLocked) "Opens without the code again" else "Stays in your list · asks your code or fingerprint to open") { closeThen(onToggleLock) }
             Card(R.drawable.ic_lock, "Move to vault", "PIN-locked, gone from the list and search · hold • to open") { closeThen(onMoveToVault) }
             if (app.component.packageName == context.packageName) {
                 // "Seelie settings" is part of Seelie: uninstalling it would remove the whole launcher.
