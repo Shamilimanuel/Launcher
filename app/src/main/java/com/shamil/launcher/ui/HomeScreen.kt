@@ -71,6 +71,8 @@ import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.rememberAppTweaks
 import com.shamil.launcher.apps.rememberApps
 import com.shamil.launcher.apps.rememberFavourites
+import com.shamil.launcher.ui.widgets.WidgetStack
+import com.shamil.launcher.ui.clock.SeelieClock
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import java.text.Collator
 import java.time.LocalDateTime
@@ -203,6 +205,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     // The stats card sits at the top of the favourites and scrolls with them,
                     // so apps can't slide up behind it (his 23 Oct bug).
                     GlanceCard(glance, Modifier.padding(start = 48.dp))
+                    // The widget stack: swipe sideways for the next widget. It sits at the top of the favourites
+                    // and scrolls away with them, so it never takes space for good. (Pick widgets in Seelie settings.)
+                    WidgetStack(Modifier.padding(start = 32.dp, top = 4.dp, bottom = 8.dp))
                     favouriteApps.forEach { app -> AppItem(app) { openMenu(app) } }
                 }
             }
@@ -241,6 +246,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 query = state.query,
                 onQuery = { state.query = it },
                 onAppMenu = openMenu,
+                // Opening an app, setting a timer or saving a note closes search.
+                onClose = { state.closeSearch() },
             )
         }
 
@@ -325,38 +332,21 @@ private fun KeepAliveFade(visible: Boolean, content: @Composable () -> Unit) {
 @Composable
 private fun ClockAndDate(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val look = LocalLauncherLook.current
     val now = rememberNow()
-    val time = now.format(DateTimeFormatter.ofPattern(if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"))
-    // Phone language decides the words: Dutch gives "do 22 okt" (we drop the dot after "okt.").
-    val date = now.format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.getDefault())).replace(".", "")
-    val noRipple = remember { MutableInteractionSource() }
-
-    Column(modifier) {
-        Text(
-            time,
-            modifier = Modifier.combinedClickable(
-                interactionSource = noRipple,
-                indication = null,
-                onClick = { openSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
-                onLongClick = { openSafely(context, DefaultHome.settingsIntent()) },
-            ),
-            style = TextStyle(fontFamily = look.font, fontWeight = look.clockWeight, color = look.text, fontSize = 47.sp, shadow = look.shadow),
-        )
-        Text(
-            date,
-            modifier = Modifier.combinedClickable(
-                interactionSource = noRipple,
-                indication = null,
-                onClick = {
-                    val today = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
-                    ContentUris.appendId(today, System.currentTimeMillis())
-                    openSafely(context, Intent(Intent.ACTION_VIEW, today.build()))
-                },
-            ),
-            style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 17.sp, shadow = look.shadow),
-        )
-    }
+    // The clock and date in the styles he picked (Seelie settings → Look → Clock & date). Tap the clock = clock app,
+    // tap the date = calendar, like Niagara.
+    SeelieClock(
+        time = now,
+        is24h = DateFormat.is24HourFormat(context),
+        onClockClick = { openSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
+        onClockLongClick = { openSafely(context, DefaultHome.settingsIntent()) },
+        onDateClick = {
+            val today = CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
+            ContentUris.appendId(today, System.currentTimeMillis())
+            openSafely(context, Intent(Intent.ACTION_VIEW, today.build()))
+        },
+        modifier = modifier,
+    )
 }
 
 /**

@@ -16,6 +16,11 @@ import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.Favourites
 import com.shamil.launcher.apps.IconPack
 import com.shamil.launcher.apps.SeelieIcons
+import com.shamil.launcher.ui.clock.ClockSettingsContent
+import com.shamil.launcher.ui.search.SearchSettingsContent
+import com.shamil.launcher.ui.clock.ClockStore
+import com.shamil.launcher.ui.widgets.WidgetStackSettingsContent
+import com.shamil.launcher.ui.widgets.WidgetStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -108,16 +113,16 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Themes, Fonts, Icons, Seelie }
+private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, Home, Widgets, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
-private val Pyro = Color(0xFFF08A5D)
-private val Hydro = Color(0xFF5BC0EB)
-private val Anemo = Color(0xFF74C2A8)
-private val Electro = Color(0xFFB58AE0)
-private val Dendro = Color(0xFFA5C83B)
-private val Cryo = Color(0xFF9FD6E3)
-private val Geo = Color(0xFFF0B232)
+internal val Pyro = Color(0xFFF08A5D)
+internal val Hydro = Color(0xFF5BC0EB)
+internal val Anemo = Color(0xFF74C2A8)
+internal val Electro = Color(0xFFB58AE0)
+internal val Dendro = Color(0xFFA5C83B)
+internal val Cryo = Color(0xFF9FD6E3)
+internal val Geo = Color(0xFFF0B232)
 
 /** One line under each theme's name, from the prototype. */
 private val TAGLINES = mapOf(
@@ -158,9 +163,9 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
                 Page.Top -> PageFrame("Serenitea", "Seelie settings", onBack = ::pop) {
                     HeroLook(summary = "${current.name} · $fontName") { push(Page.Look) }
                     SectionLabel("Settings")
-                    GroupCard(R.drawable.ic_home, Pyro, "Home screen", "Glance & weather, widget stack, music card, favourites", soon = true)
+                    GroupCard(R.drawable.ic_home, Pyro, "Home screen", "Widget stack, glance & weather, music card") { push(Page.Home) }
                     GroupCard(R.drawable.ic_list, Anemo, "App list", "Rail wave, hidden apps, slide-to-open, sections", soon = true)
-                    GroupCard(R.drawable.ic_search, Hydro, "Search & commands", "What Seelie searches, the > commands", soon = true)
+                    GroupCard(R.drawable.ic_search, Hydro, "Search & commands", "What Seelie searches, the > commands") { push(Page.Search) }
                     GroupCard(R.drawable.ic_touch_app, Electro, "Gestures", "Swipes and taps on apps and the home screen", soon = true)
                     GroupCard(R.drawable.ic_lock, Geo, "Privacy", "PIN vault for hidden apps", soon = true)
                     GroupCard(R.drawable.ic_settings, look.accent, "Seelie", "Default home app, version") { push(Page.Seelie) }
@@ -168,7 +173,7 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
                 Page.Look -> PageFrame("Serenitea", "Look", onBack = ::pop, preview = true) {
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
-                    GroupCard(R.drawable.ic_schedule, Geo, "Clock & date", "Clock styles, date and glance styles", soon = true)
+                    GroupCard(R.drawable.ic_schedule, Geo, "Clock & date", ClockStore.get(LocalContext.current).clockStyle.label) { push(Page.Clock) }
                     GroupCard(R.drawable.ic_apps, Cryo, "Icons", "Icon pack and icon size") { push(Page.Icons) }
                     GroupCard(R.drawable.ic_wallpaper, Dendro, "Backgrounds", "Living backgrounds", soon = true)
                 }
@@ -191,6 +196,21 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
                 Page.Icons -> PageFrame("Look", "Icons", onBack = ::pop) {
                     IconsPage(looks)
                 }
+                Page.Clock -> PageFrame("Look", "Clock & date", onBack = ::pop) {
+                    ClockSettingsContent()
+                }
+                Page.Home -> PageFrame("Serenitea", "Home screen", onBack = ::pop) {
+                    val widgets = WidgetStore.get(LocalContext.current).stack.size
+                    GroupCard(R.drawable.ic_widgets, Pyro, "Widget stack", if (widgets == 1) "1 widget" else "$widgets widgets") { push(Page.Widgets) }
+                    GroupCard(R.drawable.ic_sunny, Geo, "Glance & weather", "Weather city, what the line shows", soon = true)
+                    GroupCard(R.drawable.ic_music_note, Electro, "Music card", "A player that keeps its spot", soon = true)
+                }
+                Page.Widgets -> PageFrame("Home screen", "Widget stack", onBack = ::pop) {
+                    WidgetStackSettingsContent()
+                }
+                Page.Search -> PageFrame("Serenitea", "Search & commands", onBack = ::pop) {
+                    SearchSettingsContent()
+                }
                 Page.Seelie -> PageFrame("Serenitea", "Seelie", onBack = ::pop) {
                     val context = LocalContext.current
                     GroupCard(R.drawable.ic_home, look.accent, "Default home app", "Pick Seelie or another launcher") {
@@ -209,7 +229,7 @@ fun SettingsApp(looks: LookStore, onClose: () -> Unit) {
 
 /** A page: back button + small gold eyebrow + big Cinzel title, an optional live preview that stays put, then the scrolling content. */
 @Composable
-private fun PageFrame(eyebrow: String, title: String, onBack: () -> Unit, preview: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+internal fun PageFrame(eyebrow: String, title: String, onBack: () -> Unit, preview: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
     val look = LocalLauncherLook.current
     val scroll = rememberScrollState()
     // 0 = at the top, 1 = scrolled ~140dp down: the big title shrinks and the small eyebrow fades away.
@@ -387,7 +407,7 @@ private fun IconsPage(looks: LookStore) {
 
 /** An icon pack to pick: its own icon (or a grid icon for "Original"), its name, and a round radio button. */
 @Composable
-private fun PackRow(name: String, sub: String, icon: ImageBitmap?, selected: Boolean, onClick: () -> Unit) {
+internal fun PackRow(name: String, sub: String, icon: ImageBitmap?, selected: Boolean, onClick: () -> Unit) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(20.dp)
     val press = remember { MutableInteractionSource() }
@@ -423,7 +443,7 @@ private fun PackRow(name: String, sub: String, icon: ImageBitmap?, selected: Boo
 
 /** A small, live copy of the home screen in the current theme and font: clock, date, glance, three favourites. */
 @Composable
-private fun LivePreview(modifier: Modifier = Modifier, height: Int = 200) {
+internal fun LivePreview(modifier: Modifier = Modifier, height: Int = 200) {
     val look = LocalLauncherLook.current
     val now = remember { LocalDateTime.now() }
     val shape = RoundedCornerShape(24.dp)
@@ -501,7 +521,7 @@ private fun HeroLook(summary: String, onClick: () -> Unit) {
 
 /** A setting group: coloured icon tile, title, one line of what's inside, and a › (or a "Soon" tag). */
 @Composable
-private fun GroupCard(@DrawableRes icon: Int, tint: Color, title: String, sub: String, soon: Boolean = false, onClick: () -> Unit = {}) {
+internal fun GroupCard(@DrawableRes icon: Int, tint: Color, title: String, sub: String, soon: Boolean = false, onClick: () -> Unit = {}) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(22.dp)
     val press = remember { MutableInteractionSource() }
@@ -537,7 +557,7 @@ private fun GroupCard(@DrawableRes icon: Int, tint: Color, title: String, sub: S
 
 /** A rounded square with a softly glowing icon in an element colour. */
 @Composable
-private fun IconTile(@DrawableRes icon: Int, tint: Color) {
+internal fun IconTile(@DrawableRes icon: Int, tint: Color) {
     val shape = RoundedCornerShape(16.dp)
     Box(
         Modifier
@@ -604,7 +624,7 @@ private fun RowScope.ThemeTile(theme: LauncherLook, selected: Boolean, onClick: 
 
 /** A font to pick: an "Aa" tile and the name, both written in that font, and a round radio button. */
 @Composable
-private fun FontRow(name: String, sub: String?, family: FontFamily, selected: Boolean, onClick: () -> Unit) {
+internal fun FontRow(name: String, sub: String?, family: FontFamily, selected: Boolean, onClick: () -> Unit) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(20.dp)
     val press = remember { MutableInteractionSource() }
@@ -644,7 +664,7 @@ private fun FontRow(name: String, sub: String?, family: FontFamily, selected: Bo
 }
 
 @Composable
-private fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String) {
     val look = LocalLauncherLook.current
     Row(Modifier.staggerIn().padding(start = 4.dp, top = 22.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text.uppercase(), style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent, fontSize = 11.sp, letterSpacing = 2.4.sp))
@@ -654,7 +674,7 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     val look = LocalLauncherLook.current
     Text(text, modifier = Modifier.staggerIn().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 14.dp),
         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp, lineHeight = 20.sp))
