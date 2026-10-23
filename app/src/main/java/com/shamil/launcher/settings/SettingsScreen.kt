@@ -25,6 +25,7 @@ import com.shamil.launcher.ui.search.SearchSettingsContent
 import com.shamil.launcher.ui.toggles.TogglesSettingsContent
 import com.shamil.launcher.ui.notify.NotifSettingsContent
 import com.shamil.launcher.ui.media.MusicSettingsContent
+import com.shamil.launcher.ui.media.MusicPreview
 import com.shamil.launcher.ui.clock.ClockStore
 import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.widgets.WidgetStackSettingsContent
@@ -332,8 +333,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 Page.Stats -> PageFrame("Home screen", "Stats card", onBack = ::pop, pinned = { StatsPreview() }) {
                     StatsSettingsContent()
                 }
-                Page.Music -> PageFrame("Home screen", "Music card", onBack = ::pop) {
-                    MusicSettingsContent()
+                // The real card stays pinned at the top while he changes things below.
+                Page.Music -> PageFrame("Home screen", "Music card", onBack = ::pop, pinned = { MusicPreview() }) {
+                    MusicSettingsContent(showPreview = false)
                 }
                 Page.Notifications -> PageFrame("Home screen", "Notifications", onBack = ::pop) {
                     NotifSettingsContent()

@@ -17,6 +17,7 @@ import com.shamil.launcher.ui.theme.LauncherTheme
 import com.shamil.launcher.ui.theme.LookStore
 import com.shamil.launcher.ui.theme.animatedLook
 import com.shamil.launcher.ui.widgets.SeelieWidgetHost
+import com.shamil.launcher.apps.VaultStore
 
 class MainActivity : ComponentActivity() {
     /** What the home screen shows (favourites / list / search). Lives here so pressing Home can reset it. */
@@ -52,6 +53,8 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         SeelieWidgetHost.stop(this)
+        // Leaving the home (an app opens, the screen goes off) locks the vault again.
+        VaultStore.get(this).lock()
     }
 
     override fun onResume() {

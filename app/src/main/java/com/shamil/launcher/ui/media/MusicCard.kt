@@ -1,9 +1,15 @@
 package com.shamil.launcher.ui.media
 
+import android.content.Context
+import android.provider.Settings
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -39,6 +45,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -85,37 +93,41 @@ import com.shamil.launcher.ui.home.Gold
 import com.shamil.launcher.ui.home.HomeStyle
 import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.home.homeCard
+import com.shamil.launcher.ui.theme.LauncherLook
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import java.util.Locale
 
 /*
  * Seelie's music card (locked feature #6, 23 Oct). Niagara's card is a cover, a title and ⏮ ⏯ ⏭ straight on the
- * wallpaper; he said "this we can improve much". Seelie's version:
- *  - the card look of his home style (so it matches the widget card), washed with a soft glow in the cover's colour
- *  - a rounded cover that glows, the title gliding sideways (a "marquee") when it's too long, the app's little icon
- *  - ⏯ in an accent circle that springs between ▶ and ⏸, a thin progress bar with times (tap it to jump)
- *  - "reserved spot": when nothing plays it can keep its place and say so calmly, so the favourites never jump.
- * Cheap on the home: when paused nothing moves; while playing it updates about once a second.
+ * wallpaper; he said "this we can improve much", then "allow me to customize it too". Seelie's version:
+ *  - the card of his home style (or its own: none / glass / solid / outline, see-through, corners)
+ *  - a cover (small / medium / large; rounded, circle, or a vinyl record that spins while playing) with a glow
+ *  - the title gliding sideways (a "marquee") when too long, the artist, the app's icon and name
+ *  - ⏯ filled / outlined / plain, springing between ▶ and ⏸; ⏮ ⏭ optional; colours from the theme, gold or the cover
+ *  - a thin or thick progress bar with times (tap it to jump)
+ *  - when nothing plays: keep its spot calmly, shrink to one small line, or hide.
+ * Cheap on the home: when paused nothing moves; while playing it updates about once a second
+ * (the vinyl spin runs in the draw phase only, and only while playing).
  */
 
-/** The music card for the home. Takes no space when he switched it off in settings. */
+/** The music card for the home. Takes no space when it's switched off in settings (the default for now). */
 @Composable
 fun MusicCard(modifier: Modifier = Modifier) = MusicCardBody(modifier, inSettings = false)
 
-/** [inSettings] = the live preview in settings: always shows the card, even when it would hide on the home. */
+/** [inSettings] = the live preview in settings: always shows the card, even when it's off or would hide on the home. */
 @Composable
 internal fun MusicCardBody(modifier: Modifier, inSettings: Boolean) {
     val context = LocalContext.current
-    val prefs = remember { MusicPrefs.get(context) }
-    if (!prefs.showCard) return
+    val ms = MusicPrefs.get(context).style
+    if (!ms.show && !inSettings) return
     val hs = HomeStyleStore.get(context).style
     if (!rememberMusicAccess()) {
-        AccessCard(hs, modifier)
+        AccessCard(ms, hs, modifier)
         return
     }
     val playing = rememberNowPlaying()
-    if (prefs.reserveSpot || inSettings) {
-        CardFrame(playing, prefs, hs, modifier)
+    if (ms.idle != "hide" || inSettings) {
+        CardFrame(playing, ms, hs, modifier)
     } else {
         // Hiding when nothing plays: keep the last song for a moment so the card can fade away with it still on.
         val last = remember { mutableStateOf<NowPlaying?>(null) }
@@ -127,122 +139,189 @@ internal fun MusicCardBody(modifier: Modifier, inSettings: Boolean) {
             exit = fadeOut(tween(180)) + shrinkVertically(tween(260)),
             label = "music card",
         ) {
-            CardFrame(playing ?: last.value, prefs, hs, Modifier)
+            CardFrame(playing ?: last.value, ms, hs, Modifier)
         }
     }
 }
 
-/** The card itself: his home-style card, a glow in the cover's colour, and the large or compact layout inside. */
+/** What every piece of the card needs to know, worked out once per card. */
+private class CardLook(
+    val ms: MusicStyle,
+    /** ⏯ and the bar. */
+    val accent: Color,
+    /** The cover's light. */
+    val glow: Color,
+    /** 0 = no glow, 1 = full glow (a cover's colour), in between = the accent's softer glow. */
+    val strength: Float,
+    val artSide: Dp,
+    val artRight: Boolean,
+)
+
+/** The card itself: its card look, a glow in the cover's colour, and the large / compact / one-line layout inside. */
 @Composable
-private fun CardFrame(np: NowPlaying?, prefs: MusicPrefs, hs: HomeStyle, modifier: Modifier) {
+private fun CardFrame(np: NowPlaying?, ms: MusicStyle, hs: HomeStyle, modifier: Modifier) {
     val look = LocalLauncherLook.current
-    val accent = if (hs.cardAccent == "gold") Gold else look.accent
-    // The glow glides to the new cover's colour when the song changes (only then: no work while it stays the same).
-    val glow by animateColorAsState(np?.artColor ?: accent, tween(700), label = "music glow")
-    val strength = if (np?.artColor != null) 1f else 0.45f
-    val compact = prefs.size == MusicPrefs.SIZE_COMPACT
+    val compact = ms.size == MusicPrefs.SIZE_COMPACT
+    // Colours glide to the new cover's colour when the song changes (only then: no work while it stays the same).
+    val accentTarget = accentFor(ms, hs, look, np)
+    val accent by animateColorAsState(accentTarget, tween(600), label = "music accent")
+    val glow by animateColorAsState(np?.artColor ?: accentTarget, tween(700), label = "music glow")
+    val strength = when {
+        !ms.artGlow -> 0f
+        np?.artColor != null -> 1f
+        else -> 0.45f
+    }
+    val artSide = artSize(ms.artSize, compact)
+    val artRight = ms.artSide == "right"
+    val parts = CardLook(ms, accent, glow, strength, artSide, artRight)
+    val idleLine = np == null && ms.idle == "line"
+    val pad = if (compact) 12.dp else 14.dp
+    // The wash is skipped with no card at all: without a card edge it would look like a smudge.
+    val wash = strength > 0f && !(!ms.followHome && ms.cardStyle == "none") && !idleLine
     Box(
         modifier
             .fillMaxWidth()
-            .homeCard(hs, look)
-            .drawBehind {
-                // A soft wash of the cover's colour, spreading from the cover across the card.
-                val center = Offset((if (compact) 35.dp else 50.dp).toPx(), size.height / 2f)
-                val radius = size.width * 0.75f
-                drawRect(
-                    Brush.radialGradient(
-                        0f to glow.copy(alpha = 0.26f * strength),
-                        1f to Color.Transparent,
-                        center = center,
-                        radius = radius,
+            // Grows and shrinks softly when he changes a setting or it switches to the small line (only during the change).
+            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = 380f))
+            .musicCard(ms, hs, look)
+            .then(
+                if (wash) Modifier.drawBehind {
+                    // A soft wash of the cover's colour, spreading from the cover across the card.
+                    val fromEdge = (pad + artSide / 2).toPx()
+                    val center = Offset(if (artRight) size.width - fromEdge else fromEdge, size.height / 2f)
+                    val radius = size.width * 0.75f
+                    drawRect(
+                        Brush.radialGradient(
+                            0f to glow.copy(alpha = 0.26f * strength),
+                            1f to Color.Transparent,
+                            center = center,
+                            radius = radius,
+                        )
                     )
-                )
-            }
-            .padding(horizontal = if (compact) 12.dp else 14.dp, vertical = if (compact) 10.dp else 14.dp)
+                } else Modifier
+            )
+            .padding(horizontal = pad, vertical = if (idleLine) 8.dp else if (compact) 10.dp else 14.dp)
     ) {
-        if (compact) CompactBody(np, prefs.showProgress, accent, glow, strength)
-        else LargeBody(np, prefs.showProgress, accent, glow, strength)
+        when {
+            idleLine -> IdleLine(parts)
+            compact -> CompactBody(np, parts)
+            else -> LargeBody(np, parts)
+        }
     }
 }
 
 /**
- * Large: cover on the left; title (+ app icon), artist and ⏮ ⏯ ⏭ beside it; the progress bar under everything.
+ * Large: cover on one side; title, artist, then ⏮ ⏯ ⏭ with the app's icon and name beside it; the bar under everything.
  * With nothing playing the same pieces stay (so the height doesn't change) but calmer: a note, and only ▶.
  */
 @Composable
-private fun LargeBody(np: NowPlaying?, showProgress: Boolean, accent: Color, glow: Color, strength: Float) {
+private fun LargeBody(np: NowPlaying?, p: CardLook) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
+    val ms = p.ms
     val open: () -> Unit = { np?.open(context) }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Art(np, 72.dp, glow, strength, open)
-            Spacer(Modifier.width(14.dp))
+            if (!p.artRight) {
+                Art(np, p, open)
+                Spacer(Modifier.width(14.dp))
+            }
             Column(Modifier.weight(1f)) {
+                TitleText(np?.title ?: "Nothing playing", np, ms.titleSize.sp, Modifier.fillMaxWidth(), open)
+                if (ms.showArtist) {
+                    val subtitle = when {
+                        np == null -> "Tap ▶ to pick up where you left off"
+                        np.artist.isNotBlank() -> np.artist
+                        else -> np.album
+                    }
+                    Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = cardText((ms.titleSize - 3f).sp, look.textDim))
+                }
+                Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TitleText(np?.title ?: "Nothing playing", np, 16.5.sp, Modifier.weight(1f), open)
-                    np?.appIcon?.let { icon ->
-                        Spacer(Modifier.width(8.dp))
-                        Image(bitmap = icon, contentDescription = np?.appLabel, modifier = Modifier.size(16.dp).clip(CircleShape))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (ms.skipButtons) {
+                            SideButton(Glyph.PREV, 36.dp, "Previous", visible = np != null, enabled = np?.canSkipPrevious == true) { np?.previous() }
+                        }
+                        PlayButton(np?.isPlaying == true, 42.dp, p) { if (np == null) resumeLastMedia(context) else np.playPause() }
+                        if (ms.skipButtons) {
+                            SideButton(Glyph.NEXT, 36.dp, "Next", visible = np != null, enabled = np?.canSkipNext == true) { np?.next() }
+                        }
+                    }
+                    if (ms.showApp) {
+                        Spacer(Modifier.width(10.dp))
+                        AppTag(np, Modifier.weight(1f))
                     }
                 }
-                val subtitle = when {
-                    np == null -> "Tap ▶ to pick up where you left off"
-                    np.artist.isNotBlank() -> np.artist
-                    else -> np.album
-                }
-                Text(
-                    subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    style = cardText(13.5.sp, look.textDim),
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SideButton(Glyph.PREV, 36.dp, "Previous", visible = np != null, enabled = np?.canSkipPrevious == true) { np?.previous() }
-                    PlayButton(np?.isPlaying == true, 42.dp, accent) { if (np == null) resumeLastMedia(context) else np.playPause() }
-                    SideButton(Glyph.NEXT, 36.dp, "Next", visible = np != null, enabled = np?.canSkipNext == true) { np?.next() }
-                }
+            }
+            if (p.artRight) {
+                Spacer(Modifier.width(14.dp))
+                Art(np, p, open)
             }
         }
-        if (showProgress) {
-            Spacer(Modifier.height(8.dp))
-            ProgressRow(np, accent)
+        when (ms.bar) {
+            "thin", "thick" -> {
+                Spacer(Modifier.height(8.dp))
+                ProgressRow(np, p.accent, thick = ms.bar == "thick")
+            }
         }
     }
 }
 
-/** Compact: one row (small cover, "title · artist", ⏯ ⏭), and a hairline progress bar under it. */
+/** Compact: one row (cover, app icon, "title · artist", ⏯ ⏭), and a slim bar under it. */
 @Composable
-private fun CompactBody(np: NowPlaying?, showProgress: Boolean, accent: Color, glow: Color, strength: Float) {
+private fun CompactBody(np: NowPlaying?, p: CardLook) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
+    val ms = p.ms
     val open: () -> Unit = { np?.open(context) }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Art(np, 46.dp, glow, strength, open)
-            Spacer(Modifier.width(12.dp))
+            if (!p.artRight) {
+                Art(np, p, open)
+                Spacer(Modifier.width(12.dp))
+            }
+            if (ms.showApp) {
+                np?.appIcon?.let { icon ->
+                    Image(bitmap = icon, contentDescription = np?.appLabel, modifier = Modifier.size(14.dp).clip(CircleShape))
+                    Spacer(Modifier.width(6.dp))
+                }
+            }
             val line = buildAnnotatedString {
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = look.text)) { append(np?.title ?: "Nothing playing") }
-                val second = when {
-                    np == null -> "tap ▶ to resume"
-                    np.artist.isNotBlank() -> np.artist
-                    else -> np.album
+                if (ms.showArtist) {
+                    val second = when {
+                        np == null -> "tap ▶ to resume"
+                        np.artist.isNotBlank() -> np.artist
+                        else -> np.album
+                    }
+                    if (second.isNotBlank()) withStyle(SpanStyle(color = look.textDim)) { append("  ·  $second") }
                 }
-                if (second.isNotBlank()) withStyle(SpanStyle(color = look.textDim)) { append("  ·  $second") }
             }
             MarqueeLine(np, Modifier.weight(1f), open) {
-                Text(line, maxLines = 1, overflow = if (np?.isPlaying == true) TextOverflow.Clip else TextOverflow.Ellipsis, style = cardText(15.sp, look.text))
+                Text(
+                    line, maxLines = 1,
+                    overflow = if (np?.isPlaying == true) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    style = cardText((ms.titleSize - 1.5f).sp, look.text),
+                )
             }
             Spacer(Modifier.width(6.dp))
-            PlayButton(np?.isPlaying == true, 38.dp, accent) { if (np == null) resumeLastMedia(context) else np.playPause() }
-            SideButton(Glyph.NEXT, 36.dp, "Next", visible = np != null, enabled = np?.canSkipNext == true) { np?.next() }
+            PlayButton(np?.isPlaying == true, 38.dp, p) { if (np == null) resumeLastMedia(context) else np.playPause() }
+            if (ms.skipButtons) {
+                SideButton(Glyph.NEXT, 36.dp, "Next", visible = np != null, enabled = np?.canSkipNext == true) { np?.next() }
+            }
+            if (p.artRight) {
+                Spacer(Modifier.width(12.dp))
+                Art(np, p, open)
+            }
         }
-        if (showProgress) {
+        if (ms.bar == "thin" || ms.bar == "thick") {
             Spacer(Modifier.height(8.dp))
             val fraction = np.fraction()
+            val accent = p.accent
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(2.dp)
+                    .height(if (ms.bar == "thick") 4.dp else 2.dp)
                     .drawBehind {
                         val y = size.height / 2f
                         drawLine(look.text.copy(alpha = 0.18f), Offset(0f, y), Offset(size.width, y), size.height, StrokeCap.Round)
@@ -253,50 +332,136 @@ private fun CompactBody(np: NowPlaying?, showProgress: Boolean, accent: Color, g
     }
 }
 
+/** "Nothing playing ▶" in one small line, for "When nothing plays → Small line". */
+@Composable
+private fun IdleLine(p: CardLook) {
+    val look = LocalLauncherLook.current
+    val context = LocalContext.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(painterResource(R.drawable.ic_music_note), contentDescription = null, tint = look.textDim, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text("Nothing playing", modifier = Modifier.weight(1f), maxLines = 1, style = cardText(14.sp, look.textDim))
+        PlayButton(false, 32.dp, p) { resumeLastMedia(context) }
+    }
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Pieces
 
-/** The cover: rounded, with a soft glow of its own colour around it. A music note when there's no cover. */
+/**
+ * The cover: rounded square, circle or vinyl, with a soft glow of its own colour around it.
+ * A music note when there's no cover.
+ */
 @Composable
-private fun Art(np: NowPlaying?, side: Dp, glow: Color, strength: Float, onClick: () -> Unit) {
+private fun Art(np: NowPlaying?, p: CardLook, onClick: () -> Unit) {
     val look = LocalLauncherLook.current
     val press = remember { MutableInteractionSource() }
-    val corner = side * 0.22f
-    val shape = RoundedCornerShape(corner)
+    val side = p.artSide
+    val round = p.ms.artShape != "rounded"
+    val vinyl = p.ms.artShape == "vinyl"
+    val corner = if (round) side / 2 else side * 0.22f
+    val shape = if (round) CircleShape else RoundedCornerShape(corner)
+    val spin = if (vinyl) rememberSpin(np?.isPlaying == true) else null
+    val glow = p.glow
+    val strength = p.strength
     Box(
         Modifier
             .size(side)
             .pressFeel(press, glow, corner)
-            .drawBehind {
-                // Light from the cover, spilling a little past its edges.
-                val radius = size.minDimension * 0.78f
-                drawCircle(
-                    Brush.radialGradient(
-                        0f to glow.copy(alpha = 0.5f * strength),
-                        0.6f to glow.copy(alpha = 0.16f * strength),
-                        1f to Color.Transparent,
-                        center = center,
+            .then(
+                if (strength > 0f) Modifier.drawBehind {
+                    // Light from the cover, spilling a little past its edges.
+                    val radius = size.minDimension * 0.78f
+                    drawCircle(
+                        Brush.radialGradient(
+                            0f to glow.copy(alpha = 0.5f * strength),
+                            0.6f to glow.copy(alpha = 0.16f * strength),
+                            1f to Color.Transparent,
+                            center = center,
+                            radius = radius,
+                        ),
                         radius = radius,
-                    ),
-                    radius = radius,
-                )
-            }
+                    )
+                } else Modifier
+            )
             .clip(shape)
-            .background(look.text.copy(alpha = 0.10f))
+            .background(if (vinyl) Color(0xFF15141B) else look.text.copy(alpha = 0.10f))
             .border(1.dp, Color.White.copy(alpha = 0.10f), shape)
             .clickable(enabled = np != null, interactionSource = press, indication = null, onClickLabel = "Open the music app", onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        // A gentle fade from the old cover to the new one when the song changes.
-        Crossfade(targetState = np?.art, animationSpec = tween(350), label = "cover") { cover ->
-            if (cover != null) {
-                Image(bitmap = cover, contentDescription = "Album cover", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(painterResource(R.drawable.ic_music_note), contentDescription = null, tint = look.textDim, modifier = Modifier.size(side * 0.42f))
+        Box(
+            Modifier
+                .fillMaxSize()
+                // The spin is read here, in the draw phase, so turning the record never recomposes anything.
+                .graphicsLayer { if (spin != null) rotationZ = spin.value }
+                .then(if (vinyl) Modifier.drawWithContent { drawContent(); drawRecord() } else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            // A gentle fade from the old cover to the new one when the song changes.
+            Crossfade(targetState = np?.art, animationSpec = tween(350), label = "cover") { cover ->
+                if (cover != null) {
+                    Image(bitmap = cover, contentDescription = "Album cover", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                } else {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Icon(painterResource(R.drawable.ic_music_note), contentDescription = null, tint = look.textDim, modifier = Modifier.size(side * 0.42f))
+                    }
                 }
             }
         }
+    }
+}
+
+/** The vinyl touches over the cover: a few faint grooves, a sheen, and the small hole in the middle. */
+private fun DrawScope.drawRecord() {
+    val r = size.minDimension / 2f
+    val hairline = 1.dp.toPx()
+    listOf(0.48f, 0.64f, 0.8f, 0.93f).forEach { k ->
+        drawCircle(Color.Black.copy(alpha = 0.22f), radius = r * k, style = Stroke(hairline))
+    }
+    // A soft light streak, so the turning is visible even on a plain cover.
+    drawCircle(
+        Brush.linearGradient(
+            listOf(Color.Transparent, Color.White.copy(alpha = 0.13f), Color.Transparent),
+            start = Offset(0f, 0f), end = Offset(size.width, size.height),
+        ),
+        radius = r,
+    )
+    drawCircle(Color.Black.copy(alpha = 0.35f), radius = r * 0.2f)
+    drawCircle(Color(0xFF0B0A10), radius = r * 0.07f)
+    drawCircle(Color.White.copy(alpha = 0.25f), radius = r * 0.2f, style = Stroke(hairline))
+}
+
+/**
+ * The record's angle: turns once every 9 seconds while playing, stops where it is when paused.
+ * Nothing runs while paused, and nothing at all when Android's animations are switched off.
+ */
+@Composable
+private fun rememberSpin(spinning: Boolean): Animatable<Float, AnimationVector1D> {
+    val context = LocalContext.current
+    val angle = remember { Animatable(0f) }
+    val allowed = remember { animationsOn(context) }
+    LaunchedEffect(spinning, allowed) {
+        if (!spinning || !allowed) return@LaunchedEffect
+        while (true) {
+            angle.animateTo(angle.value + 360f, tween(9_000, easing = LinearEasing))
+            angle.snapTo(angle.value % 360f)
+        }
+    }
+    return angle
+}
+
+/** The music app's little icon and name, at the end of the button row. */
+@Composable
+private fun AppTag(np: NowPlaying?, modifier: Modifier) {
+    val look = LocalLauncherLook.current
+    Row(modifier, horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+        np?.appIcon?.let { icon ->
+            Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(14.dp).clip(CircleShape))
+            Spacer(Modifier.width(5.dp))
+        }
+        val name = np?.appLabel.orEmpty()
+        if (name.isNotBlank()) Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = cardText(11.5.sp, look.textDim))
     }
 }
 
@@ -326,17 +491,20 @@ private fun MarqueeLine(np: NowPlaying?, modifier: Modifier, onOpen: () -> Unit,
     ) { content() }
 }
 
-/** ⏯: an accent circle with a soft halo; the ▶ and ⏸ swap with a little spring. */
+/**
+ * ⏯ in his chosen style: "filled" (accent circle with a soft halo), "outline" (accent ring), or "plain" (just the icon).
+ * The ▶ and ⏸ swap with a little spring.
+ */
 @Composable
-private fun PlayButton(playing: Boolean, diameter: Dp, accent: Color, onClick: () -> Unit) {
+private fun PlayButton(playing: Boolean, diameter: Dp, p: CardLook, onClick: () -> Unit) {
     val look = LocalLauncherLook.current
     val press = remember { MutableInteractionSource() }
-    // Dark ink on the accent, like the picked pills in settings.
-    val ink = look.sheet.copy(alpha = 1f)
-    Box(
-        Modifier
-            .size(diameter)
-            .pressFeel(press, Color.White, diameter / 2)
+    val accent = p.accent
+    val style = p.ms.buttons
+    // Dark ink on the filled accent (like the picked pills in settings); the accent itself otherwise.
+    val ink = if (style == "filled") look.sheet.copy(alpha = 1f) else accent
+    val shell = when (style) {
+        "filled" -> Modifier
             .drawBehind {
                 val radius = size.minDimension * 0.5f + 5.dp.toPx()
                 drawCircle(
@@ -346,6 +514,17 @@ private fun PlayButton(playing: Boolean, diameter: Dp, accent: Color, onClick: (
             }
             .clip(CircleShape)
             .background(accent)
+        "outline" -> Modifier
+            .clip(CircleShape)
+            .background(accent.copy(alpha = 0.12f))
+            .border(1.5.dp, accent, CircleShape)
+        else -> Modifier.clip(CircleShape)
+    }
+    Box(
+        Modifier
+            .size(diameter)
+            .pressFeel(press, if (style == "filled") Color.White else accent, diameter / 2)
+            .then(shell)
             .clickable(interactionSource = press, indication = null, onClick = onClick)
             .semantics { contentDescription = if (playing) "Pause" else "Play"; role = Role.Button },
         contentAlignment = Alignment.Center,
@@ -358,7 +537,7 @@ private fun PlayButton(playing: Boolean, diameter: Dp, accent: Color, onClick: (
             },
             label = "play pause",
         ) { isPlaying ->
-            GlyphIcon(if (isPlaying) Glyph.PAUSE else Glyph.PLAY, ink, diameter * 0.5f)
+            GlyphIcon(if (isPlaying) Glyph.PAUSE else Glyph.PLAY, ink, diameter * if (style == "plain") 0.7f else 0.5f)
         }
     }
 }
@@ -382,9 +561,12 @@ private fun SideButton(glyph: Glyph, diameter: Dp, label: String, visible: Boole
     }
 }
 
-/** Elapsed time, the bar (tap to jump there, when the app allows it), total time. Same height when nothing plays. */
+/**
+ * Elapsed time, the bar (tap to jump there, when the app allows it), total time. Same height when nothing plays.
+ * [thick] = a 6dp rounded bar; otherwise a 2dp line with a small bead at the playing point.
+ */
 @Composable
-private fun ProgressRow(np: NowPlaying?, accent: Color) {
+private fun ProgressRow(np: NowPlaying?, accent: Color, thick: Boolean) {
     val look = LocalLauncherLook.current
     // The tap handler is set up once; this keeps it pointing at the latest song.
     val latest by rememberUpdatedState(np)
@@ -405,12 +587,11 @@ private fun ProgressRow(np: NowPlaying?, accent: Color) {
                 )
                 .drawBehind {
                     val y = size.height / 2f
-                    val thick = 3.dp.toPx()
-                    drawLine(look.text.copy(alpha = 0.18f), Offset(0f, y), Offset(size.width, y), thick, StrokeCap.Round)
+                    val line = (if (thick) 6.dp else 2.dp).toPx()
+                    drawLine(look.text.copy(alpha = 0.18f), Offset(0f, y), Offset(size.width, y), line, StrokeCap.Round)
                     if (fraction > 0f) {
-                        drawLine(accent, Offset(0f, y), Offset(size.width * fraction, y), thick, StrokeCap.Round)
-                        // A small bead at the playing point.
-                        drawCircle(accent, radius = thick * 1.25f, center = Offset(size.width * fraction, y))
+                        drawLine(accent, Offset(0f, y), Offset(size.width * fraction, y), line, StrokeCap.Round)
+                        if (!thick) drawCircle(accent, radius = 3.5.dp.toPx(), center = Offset(size.width * fraction, y))
                     }
                 }
         )
@@ -426,16 +607,16 @@ private fun TimeText(text: String, align: TextAlign) {
 
 /** The small card shown while Notification access is off: one tap to Android's switch for it. */
 @Composable
-private fun AccessCard(hs: HomeStyle, modifier: Modifier) {
+private fun AccessCard(ms: MusicStyle, hs: HomeStyle, modifier: Modifier) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
-    val accent = if (hs.cardAccent == "gold") Gold else look.accent
+    val accent = accentFor(ms, hs, look, null)
     val press = remember { MutableInteractionSource() }
     Row(
         modifier
             .fillMaxWidth()
-            .pressFeel(press, accent, hs.cardRadius.dp)
-            .homeCard(hs, look)
+            .pressFeel(press, accent, (if (ms.followHome) hs.cardRadius else ms.cardRadius).dp)
+            .musicCard(ms, hs, look)
             .clickable(interactionSource = press, indication = null) { openNotificationAccess(context) }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -504,6 +685,42 @@ private fun DrawScope.drawGlyph(glyph: Glyph, color: Color) {
 
 // ---------------------------------------------------------------------------------------------------------------
 // Small helpers
+
+/**
+ * The card look: his home style's card ("Follow Home style"), or the music card's own style, see-through and corners.
+ * Its own "none" means truly no card; the text keeps its shadow so it stays readable.
+ */
+private fun Modifier.musicCard(ms: MusicStyle, hs: HomeStyle, look: LauncherLook): Modifier = when {
+    ms.followHome -> homeCard(hs, look)
+    ms.cardStyle == "none" -> this
+    else -> homeCard(
+        hs.copy(
+            cardStyle = ms.cardStyle,
+            cardOpacity = ms.cardOpacity,
+            cardRadius = ms.cardRadius,
+            cardBorder = ms.cardStyle == "glass" || ms.cardStyle == "outline",
+        ),
+        look,
+    )
+}
+
+/** The colour of ⏯ and the bar. "theme" follows the home style's gold when the card follows it. */
+private fun accentFor(ms: MusicStyle, hs: HomeStyle, look: LauncherLook, np: NowPlaying?): Color = when (ms.accent) {
+    "gold" -> Gold
+    "art" -> np?.artColor ?: look.accent
+    else -> if (ms.followHome && hs.cardAccent == "gold") Gold else look.accent
+}
+
+/** Cover size: small / medium / large, a bit smaller on the one-row compact card. */
+private fun artSize(choice: String, compact: Boolean): Dp = when (choice) {
+    "small" -> if (compact) 36.dp else 48.dp
+    "large" -> if (compact) 56.dp else 96.dp
+    else -> if (compact) 46.dp else 72.dp
+}
+
+/** False when he switched animations off in Android's developer options ("Animator duration scale" = off). */
+private fun animationsOn(context: Context): Boolean =
+    Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f
 
 /** How far through the song (0–1); 0 when nothing plays or the length is unknown. */
 private fun NowPlaying?.fraction(): Float {

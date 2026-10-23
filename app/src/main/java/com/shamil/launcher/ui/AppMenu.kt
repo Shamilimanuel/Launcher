@@ -85,6 +85,8 @@ fun AppMenuSheet(
     onDismiss: () -> Unit,
     /** Opens the "swipe left" chooser for this app. */
     onSwipeLeft: () -> Unit = {},
+    /** Puts the app in the PIN vault. */
+    onMoveToVault: () -> Unit = {},
 ) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
@@ -148,6 +150,7 @@ fun AppMenuSheet(
                 if (isHidden) "Show in app list" else "Hide from app list",
                 if (isHidden) "Back in the A–Z" else "Find it again under the •",
             ) { closeThen(onToggleHidden) }
+            Card(R.drawable.ic_lock, "Move to vault", "PIN-locked, gone from the list and search · hold • to open") { closeThen(onMoveToVault) }
             if (app.component.packageName == context.packageName) {
                 // "Seelie settings" is part of Seelie: uninstalling it would remove the whole launcher.
                 Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {

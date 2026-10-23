@@ -8,16 +8,38 @@ import androidx.core.content.edit
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** How the quick toggles row is set up. The style strings are saved, so never rename them. */
+/** How the quick toggles row is set up. All the strings are saved, so never rename them. */
 data class ToggleSetup(
-    /** Show the row between the favourites at all. */
-    val show: Boolean = true,
+    /** Show the row between the favourites. Off until he switches it on (his ask, 23 Oct: "don't show it yet"). */
+    val show: Boolean = false,
     /** Which toggles, in this order. */
     val toggles: List<QuickToggle> = QuickToggle.DEFAULT,
     /** The row sits after this many favourites (0 = above the first one). */
     val after: Int = 3,
-    /** [TogglePrefs.STYLE_ICONS] = round icons only, [TogglePrefs.STYLE_PILLS] = icon + short name + state. */
+    /** [TogglePrefs.STYLE_ICONS] = icon only, [TogglePrefs.STYLE_PILLS] = icon with its name beside it. */
     val style: String = TogglePrefs.STYLE_ICONS,
+    /** Button size: "small" (36dp), "medium" (44dp, like the app icons) or "large" (52dp). */
+    val size: String = "medium",
+    /** Space between the buttons (dp). */
+    val gap: Int = 12,
+    /** "circle", "squircle" (rounded square) or "pill" (wider). */
+    val shape: String = "circle",
+    /** Colour when on: "accent" (the theme's), "gold", "white" or "home" (follows Home style's widget accent). */
+    val onColour: String = "accent",
+    /** A soft halo around a button that's on. */
+    val glow: Boolean = true,
+    /** Look when off: "glass" (see-through with an outline), "soft" (a soft filled circle) or "bare" (just the icon). */
+    val offLook: String = "glass",
+    /** "none" = straight on the wallpaper, "card" = a card behind the whole row that follows Home style. */
+    val backing: String = "none",
+    /** A small "QUICK TOGGLES" heading inside the card. */
+    val cardLabel: Boolean = true,
+    /** "start" = on the favourites' icon edge, "center" = centred, "spread" = spread evenly over the width. */
+    val align: String = "start",
+    /** The name under each button (icon-only style). */
+    val labels: Boolean = false,
+    /** The small "On" / "Off" line (off by default, so the approved look stays: just the round icons). */
+    val stateLine: Boolean = false,
 )
 
 /** The saved quick-toggles setup (on the phone, Compose state, one shared store: like HomePrefs). */
@@ -29,12 +51,18 @@ class TogglePrefs private constructor(context: Context) {
 
     fun change(edit: (ToggleSetup) -> ToggleSetup) {
         setup = edit(setup)
+        val s = setup
         prefs.edit {
             putString(KEY, JSONObject().apply {
-                put("show", setup.show)
-                put("toggles", JSONArray(setup.toggles.map { it.id }))
-                put("after", setup.after)
-                put("style", setup.style)
+                put("v", VERSION)
+                put("show", s.show)
+                put("toggles", JSONArray(s.toggles.map { it.id }))
+                put("after", s.after)
+                put("style", s.style)
+                put("size", s.size); put("gap", s.gap); put("shape", s.shape)
+                put("onColour", s.onColour); put("glow", s.glow); put("offLook", s.offLook)
+                put("backing", s.backing); put("cardLabel", s.cardLabel)
+                put("align", s.align); put("labels", s.labels); put("stateLine", s.stateLine)
             }.toString())
         }
     }
@@ -51,13 +79,29 @@ class TogglePrefs private constructor(context: Context) {
 
     private fun load(): ToggleSetup = try {
         val o = JSONObject(prefs.getString(KEY, null) ?: return ToggleSetup())
+        val d = ToggleSetup()
         val list = o.optJSONArray("toggles")
+        /** A saved word, but only if it's one we know; otherwise the default. */
+        fun pick(key: String, fallback: String, vararg allowed: String): String =
+            o.optString(key, fallback).takeIf { it in allowed } ?: fallback
         ToggleSetup(
-            show = o.optBoolean("show", true),
-            toggles = if (list == null) QuickToggle.DEFAULT
+            // A setup saved by the first version (no "v") was shown by default; his new wish is hidden until he says so.
+            show = if (o.optInt("v", 1) >= VERSION) o.optBoolean("show", d.show) else false,
+            toggles = if (list == null) d.toggles
             else (0 until list.length()).mapNotNull { QuickToggle.byId(list.optString(it)) }.distinct(),
-            after = o.optInt("after", 3).coerceIn(0, MAX_AFTER),
-            style = o.optString("style", STYLE_ICONS).takeIf { it == STYLE_ICONS || it == STYLE_PILLS } ?: STYLE_ICONS,
+            after = o.optInt("after", d.after).coerceIn(0, MAX_AFTER),
+            style = pick("style", d.style, STYLE_ICONS, STYLE_PILLS),
+            size = pick("size", d.size, "small", "medium", "large"),
+            gap = o.optInt("gap", d.gap).coerceIn(MIN_GAP, MAX_GAP),
+            shape = pick("shape", d.shape, "circle", "squircle", "pill"),
+            onColour = pick("onColour", d.onColour, "accent", "gold", "white", "home"),
+            glow = o.optBoolean("glow", d.glow),
+            offLook = pick("offLook", d.offLook, "glass", "soft", "bare"),
+            backing = pick("backing", d.backing, "none", "card"),
+            cardLabel = o.optBoolean("cardLabel", d.cardLabel),
+            align = pick("align", d.align, "start", "center", "spread"),
+            labels = o.optBoolean("labels", d.labels),
+            stateLine = o.optBoolean("stateLine", d.stateLine),
         )
     } catch (e: Exception) {
         ToggleSetup()
@@ -68,7 +112,12 @@ class TogglePrefs private constructor(context: Context) {
         const val STYLE_PILLS = "pills"
         /** The position slider goes up to this many favourites. */
         const val MAX_AFTER = 10
+        /** The spacing slider's range (dp). */
+        const val MIN_GAP = 4
+        const val MAX_GAP = 28
         private const val KEY = "setup"
+        /** 2 = the customisable version (23 Oct). */
+        private const val VERSION = 2
         @Volatile private var instance: TogglePrefs? = null
 
         fun get(context: Context): TogglePrefs =

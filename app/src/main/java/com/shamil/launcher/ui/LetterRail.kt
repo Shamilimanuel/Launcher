@@ -1,5 +1,6 @@
 package com.shamil.launcher.ui
 
+import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -63,6 +64,8 @@ private const val WAVE_WIDTH = 4.7f   // measured: 3 letters away ~80%, 6 away ~
 private const val VERTICAL_PULL = 0f   // Niagara keeps the letters evenly spaced (his screenshot); only the stretch moves them
 /** How many letters around the thumb feel that vertical pull (a narrower bell than the sideways wave). */
 private const val VERTICAL_WIDTH = 2.6f
+/** How long to hold • before the vault opens. */
+private const val HOLD_MS = 600L
 /** How much bigger the letter under the finger gets (Niagara: barely). */
 private const val WAVE_GROW = 0.08f
 /** Width of the letter column; the touch strip around it is wider and runs to the screen edge. */
@@ -82,11 +85,14 @@ fun LetterRail(
     onSlide: (Float?) -> Unit = {},
     /** Finger lifted; true if it was sliding on the list (so home can open the app under it). */
     onRelease: (Boolean) -> Unit = {},
+    /** Holding • (the bottom of the rail) for a moment: opens the vault (his locked feature #7). */
+    onHoldDot: () -> Unit = {},
     onPick: (String) -> Unit,
 ) {
     val look = LocalLauncherLook.current
     val haptics = LocalHapticFeedback.current
     val currentOnPick by rememberUpdatedState(onPick)
+    val currentOnHoldDot by rememberUpdatedState(onHoldDot)
     val currentOnSlide by rememberUpdatedState(onSlide)
     val currentOnRelease by rememberUpdatedState(onRelease)
     var sliding by remember { mutableStateOf(false) }
@@ -144,10 +150,28 @@ fun LetterRail(
                 awaitEachGesture {
                     val down = awaitFirstDown().position
                     follow(down.x, down.y)
+                    // Holding still on • for HOLD_MS = "open the vault" (a buzz, once per touch).
+                    var dotSince = if (active == DOT) SystemClock.uptimeMillis() else -1L
+                    var held = false
                     while (true) {
-                        val change = awaitPointerEvent().changes.first()
+                        val waiting = active == DOT && !held && !sliding && dotSince >= 0
+                        val event = if (waiting) {
+                            val left = (HOLD_MS - (SystemClock.uptimeMillis() - dotSince)).coerceAtLeast(1L)
+                            withTimeoutOrNull(left) { awaitPointerEvent() }
+                        } else {
+                            awaitPointerEvent()
+                        }
+                        if (event == null) {
+                            held = true
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            currentOnHoldDot()
+                            continue
+                        }
+                        val change = event.changes.first()
                         if (!change.pressed) break
+                        val before = active
                         follow(change.position.x, change.position.y)
+                        if (active == DOT && before != DOT) dotSince = SystemClock.uptimeMillis()
                         change.consume()
                     }
                     currentOnRelease(sliding)

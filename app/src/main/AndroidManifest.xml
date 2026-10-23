@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- The event line under the date + the agenda pop-up: his next events. Asked only when he taps "Tap to show your events". -->
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- The vault: unlock with a fingerprint as well as the PIN (a normal permission, no question). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <!-- Stats card: the Wi-Fi signal strength (a normal permission, no question to him). -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 

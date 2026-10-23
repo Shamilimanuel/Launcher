@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import android.content.IntentFilter
 import android.provider.AlarmClock
 import android.provider.CalendarContract
@@ -76,6 +77,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.shamil.launcher.DefaultHome
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.LaunchStats
+import com.shamil.launcher.apps.VaultStore
 import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.rememberAppTweaks
 import com.shamil.launcher.apps.rememberApps
@@ -139,13 +141,16 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             .map { app -> tweaks.names[app.component.packageName]?.let { app.copy(label = it) } ?: app }
             .sortedWith(compareBy(collator) { it.label })
     }
+    // Apps in the PIN vault vanish everywhere (list, search, favourites, Hidden apps) until he unlocks it.
+    val vault = remember { VaultStore.get(context) }
+    val outsideVault = remember(apps, vault.apps) { apps.filter { it.component.packageName !in vault } }
     // Hidden apps leave the A–Z list and search (they still show in favourites, and under "Hidden apps").
-    val (hiddenApps, listedApps) = remember(apps, tweaks.hidden) {
-        apps.partition { tweaks.isHidden(it.component.packageName) }
+    val (hiddenApps, listedApps) = remember(outsideVault, tweaks.hidden) {
+        outsideVault.partition { tweaks.isHidden(it.component.packageName) }
     }
     // His favourites, in his order, matched to the installed apps (uninstalled ones are skipped).
-    val favouriteApps = remember(apps, favourites.packages) {
-        favourites.packages.mapNotNull { pkg -> apps.firstOrNull { it.component.packageName == pkg } }
+    val favouriteApps = remember(outsideVault, favourites.packages) {
+        favourites.packages.mapNotNull { pkg -> outsideVault.firstOrNull { it.component.packageName == pkg } }
     }
     val lettersWithApps = remember(listedApps) { listedApps.map { it.letter }.toSet() }
     // "Suggested" in Edit favourites: the apps he opened most in the last 2 weeks that aren't favourites yet;
@@ -174,6 +179,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The app whose menu is open (long-press), or null.
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
+    // The PIN vault (hold • on the rail).
+    var vaultOpen by remember { mutableStateOf(false) }
+    BackHandler(enabled = vaultOpen) { vault.lock(); vaultOpen = false }
     // The "swipe left" chooser for one app (or null).
     var gestureApp by remember { mutableStateOf<AppEntry?>(null) }
     // The "Seelie widget" sheet (long-press beside the clock).
@@ -329,7 +337,12 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             )
         }
 
-        if (!state.searching && !state.editingFavourites) {
+        // The vault, over everything (hold • on the rail).
+        AnimatedVisibility(visible = vaultOpen, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
+            VaultScreen(allApps = apps, onClose = { vaultOpen = false })
+        }
+
+        if (!state.searching && !state.editingFavourites && !vaultOpen) {
             LetterRail(
                 present = lettersWithApps,
                 modifier = Modifier
@@ -345,6 +358,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     slideY = null
                     slideTarget = null
                 },
+                onHoldDot = { vaultOpen = true },
             ) { picked -> onListLetter(if (picked == STAR) null else picked) }
         }
     }
@@ -379,6 +393,12 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             onRename = { tweaks.rename(pkg, it) },
             onDismiss = { menuApp = null },
             onSwipeLeft = { gestureApp = app },
+            onMoveToVault = {
+                vault.add(pkg)
+                // First time: open the vault so he makes his PIN right away.
+                if (!vault.hasPin) vaultOpen = true
+                else Toast.makeText(context, "${app.label} is in the vault · hold • to open it", Toast.LENGTH_SHORT).show()
+            },
         )
     }
 }

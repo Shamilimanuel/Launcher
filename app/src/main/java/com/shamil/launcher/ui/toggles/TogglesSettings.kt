@@ -52,8 +52,9 @@ import kotlin.math.roundToInt
 
 /*
  * Seelie settings → Home screen → Quick toggles.
- * A live preview of the real row on top (tap it, it works), then: show it or not, which toggles in which order,
- * where between the favourites, round icons or pills, and an honest list of what each button really does.
+ * A live preview of the real row on top (tap it, it works; shown here even while the row is hidden on the home),
+ * then: show it, which toggles in which order, where, the buttons (size, spacing, shape, names), colours,
+ * the card behind it, and an honest list of what each button really does.
  */
 
 @Composable
@@ -66,7 +67,7 @@ fun ColumnScope.TogglesSettingsContent() {
     val connected by NotifyHub.connected.collectAsState()
     val quietCanSwitch = connected || NotifyHub.isEnabled(context)
 
-    // The live preview: the very same row as on the home, a little less indented. Faded while the row is switched off.
+    // The live preview: the very same row as on the home (a little less indented), always shown here.
     val shape = RoundedCornerShape(20.dp)
     Box(
         Modifier
@@ -76,13 +77,15 @@ fun ColumnScope.TogglesSettingsContent() {
             .clip(shape)
             .background(look.card)
             .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
-            .padding(vertical = 6.dp)
-            .graphicsLayer { alpha = if (s.show) 1f else 0.4f },
+            .padding(vertical = 6.dp),
     ) {
         if (s.toggles.isEmpty()) EmptyTogglesHint("Pick a toggle below to see it here", startPadding = 16.dp)
         else QuickTogglesRow(startPadding = 14.dp)
     }
-    Hint("This is the real row: tap to try it. Long-press a toggle for its full settings page.")
+    Hint(
+        if (s.show) "This is the real row: tap to try it. Long-press a toggle for its full settings page."
+        else "Hidden on your home for now: only this preview shows it. Tap to try it, then switch it on below when you like it."
+    )
 
     Choice("Show between your favourites", ON_OFF, s.show.onOff()) { v -> prefs.change { it.copy(show = v == "on") } }
 
@@ -106,12 +109,44 @@ fun ColumnScope.TogglesSettingsContent() {
     SectionLabel("Place")
     Slide(
         "Sits after", s.after.toFloat(), 0f..TogglePrefs.MAX_AFTER.toFloat(), steps = TogglePrefs.MAX_AFTER - 1,
-        unit = if (s.after == 1) "favourite" else "favourites", enabled = s.show,
+        unit = if (s.after == 1) "favourite" else "favourites",
     ) { v -> prefs.change { it.copy(after = v.roundToInt()) } }
     Hint("0 puts the row above your first favourite. With fewer favourites than this, it sits after the last one.")
-    Choice("Style", listOf(TogglePrefs.STYLE_ICONS to "Round icons", TogglePrefs.STYLE_PILLS to "Icon + name"), s.style, enabled = s.show) { v ->
+    Choice("Line up", listOf("start" to "With the icons", "center" to "Centred", "spread" to "Spread out"), s.align) { v ->
+        prefs.change { it.copy(align = v) }
+    }
+
+    SectionLabel("Buttons")
+    Choice("Size", listOf("small" to "Small", "medium" to "Medium", "large" to "Large"), s.size) { v -> prefs.change { it.copy(size = v) } }
+    Slide(
+        "Space between", s.gap.toFloat(), TogglePrefs.MIN_GAP.toFloat()..TogglePrefs.MAX_GAP.toFloat(),
+        steps = (TogglePrefs.MAX_GAP - TogglePrefs.MIN_GAP) / 2 - 1, unit = "dp",
+    ) { v -> prefs.change { it.copy(gap = (v / 2f).roundToInt() * 2) } }   // in steps of 2dp
+    Choice("Shape", listOf("circle" to "Circle", "squircle" to "Squircle", "pill" to "Pill"), s.shape) { v -> prefs.change { it.copy(shape = v) } }
+    Choice("Inside the button", listOf(TogglePrefs.STYLE_ICONS to "Icon only", TogglePrefs.STYLE_PILLS to "Icon + name"), s.style) { v ->
         prefs.change { it.copy(style = v) }
     }
+    Choice("Name under each button", ON_OFF, s.labels.onOff(), enabled = s.style == TogglePrefs.STYLE_ICONS) { v ->
+        prefs.change { it.copy(labels = v == "on") }
+    }
+    Choice("On / Off line", ON_OFF, s.stateLine.onOff()) { v -> prefs.change { it.copy(stateLine = v == "on") } }
+
+    SectionLabel("Colours")
+    Choice("When on", listOf("accent" to "Accent", "gold" to "Gold", "white" to "White", "home" to "Home style"), s.onColour) { v ->
+        prefs.change { it.copy(onColour = v) }
+    }
+    Choice("Glow when on", ON_OFF, s.glow.onOff()) { v -> prefs.change { it.copy(glow = v == "on") } }
+    Choice("When off", listOf("glass" to "Glass", "soft" to "Soft fill", "bare" to "Icon only"), s.offLook) { v ->
+        prefs.change { it.copy(offLook = v) }
+    }
+    Hint("\"Home style\" uses the same accent as your widget card (Look → Home style): the theme's colour or gold.")
+
+    SectionLabel("Behind the row")
+    Choice("Backing", listOf("none" to "Nothing", "card" to "A card"), s.backing) { v -> prefs.change { it.copy(backing = v) } }
+    Choice("\"Quick toggles\" heading", ON_OFF, s.cardLabel.onOff(), enabled = s.backing == "card") { v ->
+        prefs.change { it.copy(cardLabel = v == "on") }
+    }
+    Hint("The card matches your widget card: its style, see-through level, corners and border all follow Look → Home style.")
 
     SectionLabel("What each one really does")
     Hint(
