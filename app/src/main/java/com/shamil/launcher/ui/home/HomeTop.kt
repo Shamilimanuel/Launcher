@@ -91,7 +91,9 @@ fun HomeTop(
     val is24h = DateFormat.is24HourFormat(context)
     Box(modifier) {
         Column(Modifier.padding(start = hs.edge.dp)) {
-            ClockFace(clocks.clockStyle, time, is24h, clockModifier)
+            // Optical alignment: big digits carry extra empty space on their left ("side bearing"), so the clock is
+            // nudged left by ~7% of its size to line up with the date by eye (23 Oct: "the clock needs to be a bit more left").
+            ClockFace(clocks.clockStyle, time, is24h, clockModifier.offset(x = -(hs.clockSize * 0.07f).dp))
             Spacer(Modifier.height(hs.gap1.dp))
             if (hs.inline) {
                 // Date and glance side by side; a small dot between them unless one of them is a pill.

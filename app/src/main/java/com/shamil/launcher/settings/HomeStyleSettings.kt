@@ -37,6 +37,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -72,7 +74,6 @@ fun ColumnScope.HomeStyleSettingsContent() {
     val s = store.style
     fun change(edit: (HomeStyle) -> HomeStyle) = store.change(edit)
 
-    HomePreview()
     Hint("A bundle styles your clock, date, the line under it and the widget card as one matching set. Pick one, then change any detail below.")
 
     SectionLabel(if (store.isCustom) "Bundles · yours is custom" else "Bundles")
@@ -145,9 +146,12 @@ private val ON_OFF = listOf("off" to "Off", "on" to "On")
 private fun Boolean.onOff() = if (this) "on" else "off"
 private fun nearestWeight(w: Int) = listOf(300, 600, 800).minBy { kotlin.math.abs(it - w) }.toString()
 
-/** The real top of the home (clock, date, line, widget stack) on a little night sky, so every change shows at once. */
+/**
+ * The real top of the home (clock, date, line, widget stack) on a little night sky, so every change shows at once.
+ * It's pinned above the controls and drawn at [scale] (smaller), so it stays in view while he scrolls.
+ */
 @Composable
-private fun HomePreview() {
+internal fun HomePreview(scale: Float = 0.7f) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(24.dp)
     val glance = rememberGlanceState()
@@ -166,10 +170,16 @@ private fun HomePreview() {
             }
             .sparkles(look.accent.copy(alpha = 1f), count = 12)
             .border(1.dp, look.accent.copy(alpha = 0.3f), shape)
-            .padding(top = 18.dp, bottom = 14.dp, end = 16.dp)
+            .padding(top = 12.dp, bottom = 10.dp, end = 12.dp)
     ) {
         val hs = HomeStyleStore.get(LocalContext.current).style
-        Column {
+        // Laid out at full size, then shrunk: the layout itself takes only the smaller space.
+        Column(Modifier.layout { measurable, constraints ->
+            val full = measurable.measure(constraints.copy(minWidth = 0, maxWidth = (constraints.maxWidth / scale).toInt()))
+            layout((full.width * scale).toInt(), (full.height * scale).toInt()) {
+                full.placeWithLayer(0, 0) { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f) }
+            }
+        }) {
             // The edge inside the preview is the real one minus the screen's own margin, so it fits on this card.
             HomeTop(time = time, glance = glance, modifier = Modifier.padding(start = 0.dp))
             Spacer(Modifier.height((hs.gap3).dp))

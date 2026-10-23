@@ -297,7 +297,8 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 Page.Icons -> PageFrame("Look", "Icons", onBack = ::pop) {
                     IconsPage(looks)
                 }
-                Page.HomeStyle -> PageFrame("Look", "Home style", onBack = ::pop) {
+                // The live preview stays pinned at the top while he scrolls through the controls (his ask, 23 Oct).
+                Page.HomeStyle -> PageFrame("Look", "Home style", onBack = ::pop, pinned = { HomePreview() }) {
                     HomeStyleSettingsContent()
                 }
                 Page.Clock -> PageFrame("Look", "Clock & date", onBack = ::pop) {
@@ -337,7 +338,12 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
 
 /** A page: back button + small gold eyebrow + big Cinzel title, an optional live preview that stays put, then the scrolling content. */
 @Composable
-internal fun PageFrame(eyebrow: String, title: String, onBack: () -> Unit, preview: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+internal fun PageFrame(
+    eyebrow: String, title: String, onBack: () -> Unit, preview: Boolean = false,
+    /** Something that stays at the top while the page scrolls (e.g. Home style's live preview). */
+    pinned: (@Composable () -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val look = LocalLauncherLook.current
     val scroll = rememberScrollState()
     // 0 = at the top, 1 = scrolled ~140dp down: the big title shrinks and the small eyebrow fades away.
@@ -377,6 +383,10 @@ internal fun PageFrame(eyebrow: String, title: String, onBack: () -> Unit, previ
                 .background(Brush.horizontalGradient(listOf(Color.Transparent, look.accent.copy(alpha = 0.35f), Color.Transparent))))
             if (preview) {
                 LivePreview(Modifier.padding(horizontal = 18.dp).staggerIn())
+                Spacer(Modifier.height(6.dp))
+            }
+            if (pinned != null) {
+                Box(Modifier.padding(horizontal = 18.dp)) { pinned() }
                 Spacer(Modifier.height(6.dp))
             }
             Column(
