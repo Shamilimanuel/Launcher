@@ -170,14 +170,21 @@ fun LetterRail(
                         .fillMaxWidth()
                         // graphicsLayer moves/scales while drawing only, so the wave stays smooth (no re-layout).
                         .graphicsLayer {
-                            val slot = railHeight / RAIL.size
-                            val center = (i + 0.5f) * slot
-                            val lettersAway = abs(center - fingerY) / slot
+                            val center = (i + 0.5f) * (railHeight / RAIL.size)
+                            // Like Niagara: when the thumb goes past the top (or bottom), the WHOLE rail stretches to
+                            // meet it, so ☆ (or •) sits right by the thumb and the other letters spread out evenly
+                            // down to the far end, which stays put (his screenshot, 23 Oct).
+                            val top = minOf(0f, fingerY)
+                            val bottom = maxOf(railHeight, fingerY)
+                            val slot = (bottom - top) / RAIL.size
+                            val stretched = top + (i + 0.5f) * slot
+                            val lettersAway = abs(stretched - fingerY) / slot
                             val pull = wave * bell(lettersAway)
                             translationX = -reachPx(fingerX) * pull
-                            // Like Niagara, the letters near the thumb are also pulled towards it up and down:
-                            // they squeeze around your finger and slide along as it moves (his ask, 23 Oct).
-                            translationY = (fingerY - center) * VERTICAL_PULL * wave * nearBell(lettersAway)
+                            // The letters near the thumb are also pulled towards it up and down:
+                            // they squeeze around your finger and slide along as it moves.
+                            translationY = (stretched - center) * wave +
+                                (fingerY - stretched) * VERTICAL_PULL * wave * nearBell(lettersAway)
                             scaleX = 1f + WAVE_GROW * pull
                             scaleY = 1f + WAVE_GROW * pull
                         },
