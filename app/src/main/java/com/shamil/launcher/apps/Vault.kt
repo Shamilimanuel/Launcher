@@ -33,6 +33,9 @@ class VaultStore private constructor(context: Context) {
         private set
     var fingerprint by mutableStateOf(prefs.getBoolean(KEY_FINGER, true))
         private set
+    /** true = a free password (letters, symbols, any length) typed on the keyboard; false = a number PIN on the pad. */
+    var passwordMode by mutableStateOf(prefs.getBoolean(KEY_MODE, false))
+        private set
     /** Open right now? Only in memory: every restart, Home press or app launch locks it again. */
     var unlocked by mutableStateOf(false)
         private set
@@ -51,13 +54,18 @@ class VaultStore private constructor(context: Context) {
         prefs.edit { putStringSet(KEY_APPS, set) }
     }
 
-    /** Sets a new PIN (4-6 digits): a fresh random salt, then the slow hash of PIN + salt. */
-    fun setPin(pin: String) {
+    /**
+     * Sets a new code: a number PIN or (with [password]) anything he likes, letters, symbols, any length (his ask, 23 Oct).
+     * A fresh random salt, then the slow hash of code + salt; the code itself is never kept.
+     */
+    fun setPin(pin: String, password: Boolean = false) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         prefs.edit {
             putString(KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
             putString(KEY_HASH, Base64.encodeToString(hash(pin, salt), Base64.NO_WRAP))
+            putBoolean(KEY_MODE, password)
         }
+        passwordMode = password
         hasPin = true
         unlocked = true
     }
@@ -104,6 +112,7 @@ class VaultStore private constructor(context: Context) {
         private const val KEY_HASH = "pin_hash"
         private const val KEY_SALT = "pin_salt"
         private const val KEY_FINGER = "fingerprint"
+        private const val KEY_MODE = "password_mode"
         @Volatile private var instance: VaultStore? = null
 
         fun get(context: Context): VaultStore =

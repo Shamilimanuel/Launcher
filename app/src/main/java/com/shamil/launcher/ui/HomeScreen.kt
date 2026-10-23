@@ -269,21 +269,28 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     // The widget stack: swipe sideways for the next widget. It sits at the top of the favourites
                     // and scrolls away with them, so it never takes space for good. (Pick widgets in Seelie settings.)
                     // Same left edge as the clock, and the bundle's space above it.
-                    WidgetStack(Modifier.padding(start = homeStyle.edge.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
-                    // The music card under the widgets, on the same left edge (Home screen → Music card).
-                    MusicCard(Modifier.padding(start = homeStyle.edge.dp, bottom = 8.dp))
+                    // Widgets and the music card in his "Widgets" text colour (Look → Fonts → Colour these).
+                    CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("widgets")) {
+                        WidgetStack(Modifier.padding(start = homeStyle.edge.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
+                        // The music card under the widgets, on the same left edge (Home screen → Music card).
+                        MusicCard(Modifier.padding(start = homeStyle.edge.dp, bottom = 8.dp))
+                    }
                     // The quick toggles row sits between his favourites, after as many as he chose (Home screen → Quick toggles).
                     val toggleSlot = remember { TogglePrefs.get(context) }.rowSlot(favouriteApps.size)
-                    favouriteApps.forEachIndexed { i, app ->
-                        if (i == toggleSlot) QuickTogglesRow()
-                        AppItem(app, showNotifications = true) { openMenu(app) }
+                    // His favourites in his "App names" text colour.
+                    CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("apps")) {
+                        favouriteApps.forEachIndexed { i, app ->
+                            if (i == toggleSlot) QuickTogglesRow()
+                            AppItem(app, showNotifications = true) { openMenu(app) }
+                        }
+                        if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                     }
-                    if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                 }
             }
         }
 
         KeepAliveFade(visible = listLetter != null && !state.searching) {
+          CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("apps")) {
             AppList(
                 apps = listedApps,
                 hiddenApps = hiddenApps,
@@ -296,6 +303,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 slideY = slideY,
                 onSlideTarget = { slideTarget = it },
             )
+          }
         }
 
         AnimatedVisibility(

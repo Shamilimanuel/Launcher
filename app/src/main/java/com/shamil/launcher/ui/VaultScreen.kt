@@ -61,6 +61,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import com.shamil.launcher.R
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.Apps
@@ -91,15 +102,166 @@ fun VaultScreen(allApps: List<AppEntry>, onClose: () -> Unit) {
     ) {
         when {
             !vault.hasPin -> PinSetup(onDone = {})
-            !vault.unlocked -> PinPad(vault)
+            !vault.unlocked -> if (vault.passwordMode) PasswordUnlock(vault) else PinPad(vault)
             else -> VaultContent(vault, allApps, onClose)
         }
     }
 }
 
-/** First time (or "Change PIN"): type a 4–6 digit PIN, then again to confirm. */
+/**
+ * First time (or "Change code"): first pick Numbers (the round pad, 4–6 digits) or Anything (a password with letters,
+ * numbers, symbols, any length), then type it twice.
+ */
 @Composable
 private fun PinSetup(onDone: () -> Unit) {
+    var mode by remember { mutableStateOf<String?>(null) }
+    when (mode) {
+        null -> CodeKindChooser { mode = it }
+        "any" -> PasswordSetup(onDone)
+        else -> NumberSetup(onDone)
+    }
+}
+
+/** "How do you want to lock it?": two big cards. */
+@Composable
+private fun CodeKindChooser(onPick: (String) -> Unit) {
+    val look = LocalLauncherLook.current
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(painterResource(R.drawable.ic_lock), null, tint = look.accent, modifier = Modifier.size(34.dp))
+        Spacer(Modifier.height(10.dp))
+        Text("Lock your vault", style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, color = look.accent, fontSize = 28.sp,
+            shadow = Shadow(look.accent.copy(alpha = 0.4f), blurRadius = 22f)))
+        Spacer(Modifier.height(6.dp))
+        Text("Pick what kind of code you want.", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp))
+        Spacer(Modifier.height(24.dp))
+        VaultSetting("Numbers", "A PIN of 4 to 6 digits on the round pad") { onPick("pin") }
+        VaultSetting("Anything", "A password: letters, numbers, symbols, spaces, as long as you like") { onPick("any") }
+        Text("Either way only a scrambled hash is kept, never the code itself.", modifier = Modifier.padding(top = 8.dp),
+            textAlign = TextAlign.Center, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
+    }
+}
+
+/** Make a password: type it, then again. At least 4 characters, anything allowed. */
+@Composable
+private fun PasswordSetup(onDone: () -> Unit) {
+    val context = LocalContext.current
+    val vault = remember { VaultStore.get(context) }
+    var first by remember { mutableStateOf<String?>(null) }
+    var entry by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    PasswordLayout(
+        title = if (first == null) "Make your password" else "Type it once more",
+        sub = message ?: if (first == null) "Letters, numbers, symbols, any length (at least 4)." else "To be sure it's right.",
+        value = entry,
+        onValue = { entry = it; message = null },
+        canSubmit = entry.length >= 4,
+        onSubmit = {
+            val f = first
+            when {
+                f == null -> { first = entry; entry = "" }
+                f == entry -> { vault.setPin(entry, password = true); onDone() }
+                else -> { first = null; entry = ""; message = "They didn't match. Start again." }
+            }
+        },
+    )
+}
+
+/** Unlock with the password (+ fingerprint, which pops up by itself when it's on). */
+@Composable
+private fun PasswordUnlock(vault: VaultStore) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    val shake = remember { Animatable(0f) }
+    var entry by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    val canFinger = vault.fingerprint && fingerprintAvailable(context)
+    LaunchedEffect(Unit) { if (canFinger) askFingerprint(context, vault) }
+    PasswordLayout(
+        title = "Vault",
+        sub = message ?: "Type your password",
+        value = entry,
+        onValue = { entry = it; message = null },
+        canSubmit = entry.isNotEmpty(),
+        offset = shake.value,
+        onFinger = if (canFinger) ({ askFingerprint(context, vault) }) else null,
+        onSubmit = {
+            if (SystemClock.uptimeMillis() < vault.lockedUntil) {
+                message = "Too many tries. Wait a moment."
+            } else if (!vault.tryPin(entry)) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Wrong password"
+                entry = ""
+                scope.launch { for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f)) }
+            }
+        },
+    )
+}
+
+/** The password screen: title, a pill text field with 👁 show/hide, the keyboard opens by itself, OK (and fingerprint). */
+@Composable
+private fun PasswordLayout(
+    title: String, sub: String, value: String, onValue: (String) -> Unit, canSubmit: Boolean, onSubmit: () -> Unit,
+    offset: Float = 0f, onFinger: (() -> Unit)? = null,
+) {
+    val look = LocalLauncherLook.current
+    var visible by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(title) { runCatching { focus.requestFocus() } }
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().imePadding().padding(horizontal = 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(painterResource(R.drawable.ic_lock), null, tint = look.accent, modifier = Modifier.size(34.dp))
+        Spacer(Modifier.height(10.dp))
+        Text(title, textAlign = TextAlign.Center, style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold,
+            color = look.accent, fontSize = 30.sp, shadow = Shadow(look.accent.copy(alpha = 0.4f), blurRadius = 22f)))
+        Spacer(Modifier.height(6.dp))
+        Text(sub, textAlign = TextAlign.Center, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp))
+        Spacer(Modifier.height(22.dp))
+        Row(
+            Modifier
+                .graphicsLayer { translationX = offset }
+                .fillMaxWidth()
+                .height(56.dp)
+                .clip(CircleShape)
+                .background(look.card)
+                .border(1.5.dp, look.accent.copy(alpha = 0.6f), CircleShape)
+                .padding(start = 20.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValue,
+                singleLine = true,
+                visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done, autoCorrectEnabled = false),
+                keyboardActions = KeyboardActions(onDone = { if (canSubmit) onSubmit() }),
+                cursorBrush = SolidColor(look.accent),
+                textStyle = TextStyle(fontFamily = look.font, color = look.text, fontSize = 20.sp, letterSpacing = 2.sp),
+                modifier = Modifier.weight(1f).focusRequester(focus),
+            )
+            // 👁: show or hide what he typed.
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable { visible = !visible }, contentAlignment = Alignment.Center) {
+                Icon(painterResource(if (visible) R.drawable.ic_visibility_off else R.drawable.ic_visibility), null, tint = look.textDim, modifier = Modifier.size(22.dp))
+            }
+        }
+        Spacer(Modifier.height(18.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (onFinger != null) PadKey("", icon = R.drawable.ic_touch_app, onClick = onFinger)
+            if (canSubmit) PadKey("OK", accent = true, onClick = onSubmit)
+        }
+    }
+}
+
+/** Make a number PIN on the round pad: 4–6 digits, then again. */
+@Composable
+private fun NumberSetup(onDone: () -> Unit) {
     val context = LocalContext.current
     val vault = remember { VaultStore.get(context) }
     var first by remember { mutableStateOf<String?>(null) }
@@ -134,20 +296,7 @@ private fun PinPad(vault: VaultStore) {
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
-
-    fun askFinger() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
-        val executor = context.mainExecutor
-        runCatching {
-            BiometricPrompt.Builder(context)
-                .setTitle("Open your vault")
-                .setNegativeButton("Use PIN", executor) { _, _ -> }
-                .build()
-                .authenticate(CancellationSignal(), executor, object : BiometricPrompt.AuthenticationCallback() {
-                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) = vault.unlockWithFingerprint()
-                })
-        }
-    }
+    fun askFinger() = askFingerprint(context, vault)
     LaunchedEffect(Unit) { if (canFinger) askFinger() }
 
     fun check() {
@@ -182,6 +331,21 @@ private fun PinPad(vault: VaultStore) {
         onDone = { check() },
         onFinger = if (canFinger) ({ askFinger() }) else null,
     )
+}
+
+/** Android's fingerprint prompt; success unlocks the vault ("Use code" closes it, back to typing). */
+private fun askFingerprint(context: android.content.Context, vault: VaultStore) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+    val executor = context.mainExecutor
+    runCatching {
+        BiometricPrompt.Builder(context)
+            .setTitle("Open your vault")
+            .setNegativeButton("Use code", executor) { _, _ -> }
+            .build()
+            .authenticate(CancellationSignal(), executor, object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) = vault.unlockWithFingerprint()
+            })
+    }
 }
 
 /** Fingerprint (or face) unlock is set up on this phone and Seelie may use it. */
@@ -328,7 +492,7 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                     VaultSetting(if (vault.fingerprint) "Fingerprint: on" else "Fingerprint: off", "Unlock with your fingerprint as well as the PIN") {
                         vault.useFingerprint(!vault.fingerprint)
                     }
-                    VaultSetting("Change PIN", "Make a new one (type it twice)") { changingPin = true }
+                    VaultSetting("Change code", "A new PIN or password (numbers, or anything you like)") { changingPin = true }
                     Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings.",
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))

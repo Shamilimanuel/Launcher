@@ -440,6 +440,34 @@ internal fun TextColourSettings(looks: com.shamil.launcher.ui.theme.LookStore) {
             }
         }
     }
-    Hint("T = your theme's own colour. It changes the clock, date, app names and A–Z.")
+    Hint("T = your theme's own colour.")
+    // Which parts get the colour; the others keep the theme's text colour.
+    Text("Colour these", modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+        style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.textDim, fontSize = 13.sp))
+    com.shamil.launcher.ui.theme.LookStore.COLOUR_PARTS.chunked(2).forEach { pair ->
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+            pair.forEach { (id, title) ->
+                val on = id in looks.colourParts
+                val press = remember { MutableInteractionSource() }
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .pressFeel(press, look.accent, 14.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (on) look.accent.copy(alpha = 0.16f) else look.card)
+                        .border(1.dp, if (on) look.accent.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.06f), RoundedCornerShape(14.dp))
+                        .clickable(interactionSource = press, indication = null) { looks.toggleColourPart(id) }
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(title, modifier = Modifier.weight(1f), maxLines = 1,
+                        style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = if (on) look.text else look.textDim, fontSize = 13.sp))
+                    if (on) Text("✓", style = TextStyle(color = look.accent, fontSize = 14.sp, fontWeight = FontWeight.Bold))
+                }
+            }
+            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
     Choice("A–Z letters", listOf("text" to "Same as text", "accent" to "Accent colour"), looks.railColour) { looks.useRailColour(it) }
 }

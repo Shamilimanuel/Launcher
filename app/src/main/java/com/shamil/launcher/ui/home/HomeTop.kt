@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -93,27 +94,30 @@ fun HomeTop(
         Column(Modifier.padding(start = hs.edge.dp)) {
             // Optical alignment: big digits carry extra empty space on their left ("side bearing"), so the clock is
             // nudged left by ~7% of its size to line up with the date by eye (23 Oct: "the clock needs to be a bit more left").
-            ClockFace(clocks.clockStyle, time, is24h, clockModifier.offset(x = -(hs.clockSize * 0.07f).dp))
+            val base = LocalLauncherLook.current
+            CompositionLocalProvider(LocalLauncherLook provides base.forPart("clock")) {
+                ClockFace(clocks.clockStyle, time, is24h, clockModifier.offset(x = -(hs.clockSize * 0.07f).dp))
+            }
             Spacer(Modifier.height(hs.gap1.dp))
             if (hs.inline) {
                 // Date and glance side by side; a small dot between them unless one of them is a pill.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    BundleDate(time, dateModifier)
+                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("date")) { BundleDate(time, dateModifier) }
                     val pills = hs.dateStyle == "pill" || hs.glanceStyle == "pill"
                     if (!pills) {
                         Spacer(Modifier.width(hs.gap2.dp / 2))
                         Box(Modifier.size(3.dp).background(LocalLauncherLook.current.text.copy(alpha = 0.55f), CircleShape))
                     }
                     Spacer(Modifier.width(if (pills) hs.gap2.dp else hs.gap2.dp / 2))
-                    Glance(glance)
+                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { Glance(glance) }
                 }
                 // His next event today (tap = agenda), under the line.
-                EventLine(Modifier.padding(top = (hs.gap2 / 2).dp))
+                CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { EventLine(Modifier.padding(top = (hs.gap2 / 2).dp)) }
             } else {
-                BundleDate(time, dateModifier)
+                CompositionLocalProvider(LocalLauncherLook provides base.forPart("date")) { BundleDate(time, dateModifier) }
                 Spacer(Modifier.height(hs.gap2.dp))
-                Glance(glance)
-                EventLine(Modifier.padding(top = (hs.gap2 / 2).dp))
+                CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { Glance(glance) }
+                CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { EventLine(Modifier.padding(top = (hs.gap2 / 2).dp)) }
             }
         }
         if (hs.spirit) Spirit(Modifier.offset(x = hs.edge.dp + 196.dp, y = 30.dp))

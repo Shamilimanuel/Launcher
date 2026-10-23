@@ -35,7 +35,15 @@ data class LauncherLook(
     val iconScale: Float = 1f,
     /** The A–Z letters' colour; Unspecified = the same as [text]. Set in Look → Fonts. */
     val rail: Color = Color.Unspecified,
+    /** His text colour for each part he picked ("apps", "clock", "date", "line", "widgets"); parts not in here keep [text]. */
+    val partText: Map<String, Color> = emptyMap(),
 ) {
+    /** This look with the text colour of one part swapped in (used around that part of the home). */
+    fun forPart(part: String): LauncherLook {
+        val c = partText[part] ?: return this
+        return copy(text = c, textDim = c.copy(alpha = c.alpha * 0.82f))
+    }
+
     /** The soft shadow behind all text, so it stays readable on any wallpaper. */
     val shadow: Shadow get() = Shadow(color = textShadow, blurRadius = 8f)
 }

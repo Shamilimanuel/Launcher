@@ -33,6 +33,15 @@ class LookStore private constructor(context: Context) {
     /** The text colour he picked ([TEXT_COLOURS] id), or null = the theme's own. */
     var textColour by mutableStateOf(prefs.getString(KEY_TEXT, null))
         private set
+    /** Which parts get his text colour (23 Oct: "can you choose what gets a color, not immediately everything"). */
+    var colourParts by mutableStateOf(prefs.getStringSet(KEY_PARTS, null)?.toSet() ?: COLOUR_PARTS.map { it.first }.toSet())
+        private set
+
+    fun toggleColourPart(part: String) {
+        colourParts = if (part in colourParts) colourParts - part else colourParts + part
+        prefs.edit { putStringSet(KEY_PARTS, colourParts) }
+    }
+
     /** The A–Z letters: "text" (same as the text) or "accent". */
     var railColour by mutableStateOf(prefs.getString(KEY_RAIL, "text") ?: "text")
         private set
@@ -44,13 +53,18 @@ class LookStore private constructor(context: Context) {
             val withFont = fontId?.let { theme.copy(font = fontById(it)) } ?: theme
             val base = withFont.copy(iconScale = iconScale)
             val text = TEXT_COLOURS[textColour]?.let { if (it == Color.Unspecified) base.accent else it }
-            val coloured = if (text == null) base else base.copy(
+            // "Menus & settings" decides the colour of everything that isn't one of the home's parts.
+            val coloured = if (text == null || MENUS !in colourParts) base else base.copy(
                 text = text,
-                textDim = text.copy(alpha = if (textColour == DARK) 0.75f else 0.82f),
-                // Dark text on a bright wallpaper reads better with a soft light glow than a dark shadow.
-                textShadow = if (textColour == DARK) Color(0x80FFFFFF) else base.textShadow,
+                textDim = text.copy(alpha = 0.82f),
             )
-            return if (railColour == "accent") coloured.copy(rail = coloured.accent) else coloured
+            val parts = if (text == null) emptyMap() else colourParts.filter { it != MENUS }.associateWith { text }
+            val rail = when {
+                railColour == "accent" -> coloured.accent
+                text != null && "rail" in colourParts -> text
+                else -> base.text
+            }
+            return coloured.copy(partText = parts, rail = rail)
         }
 
     /**
@@ -107,6 +121,14 @@ class LookStore private constructor(context: Context) {
         private const val KEY_ICON_SCALE = "icon_scale"
         private const val KEY_TEXT = "text_colour"
         private const val KEY_RAIL = "rail_colour"
+        private const val KEY_PARTS = "colour_parts"
+        const val MENUS = "menus"
+
+        /** The parts his text colour can go to: (id, what the chip says). */
+        val COLOUR_PARTS = listOf(
+            "apps" to "App names", "clock" to "Clock", "date" to "Date", "line" to "Line under the date",
+            "widgets" to "Widgets", "rail" to "A–Z letters", MENUS to "Menus & settings",
+        )
         const val DARK = "dark"
 
         /** The text colours he can pick (his ask, 23 Oct). Unspecified = the theme's accent, lightened a little. */
