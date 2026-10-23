@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -152,10 +153,10 @@ fun AppList(
         // The launcher's own corner, reached with the • at the bottom of the rail.
         item(key = "header-launcher") { SectionHeader(stringResource(R.string.app_name)) }
         item(key = "switch-home") {
-            ActionRow(R.drawable.ic_home, "Switch Home app") { openSafely(context, DefaultHome.settingsIntent()) }
+            ActionRow(R.drawable.ic_home_filled, "Switch Home app") { openSafely(context, DefaultHome.settingsIntent()) }
         }
         item(key = "recent") {
-            ActionRow(R.drawable.ic_history, "Recently installed") { showRecent = !showRecent }
+            ActionRow(R.drawable.ic_history_filled, "Recently installed") { showRecent = !showRecent }
         }
         if (showRecent) {
             items(recentApps, key = { "recent-${it.key}" }) { app -> AppRow(app) { onAppMenu(app) } }
@@ -163,7 +164,7 @@ fun AppList(
         // Hidden apps are never lost: they live here, and long-press brings them back.
         if (hiddenApps.isNotEmpty()) {
             item(key = "hidden") {
-                ActionRow(R.drawable.ic_visibility_off, "Hidden apps (${hiddenApps.size})") { showHidden = !showHidden }
+                ActionRow(R.drawable.ic_visibility_off_filled, "Hidden apps (${hiddenApps.size})") { showHidden = !showHidden }
             }
             if (showHidden) {
                 items(hiddenApps, key = { "hidden-${it.key}" }) { app -> AppRow(app) { onAppMenu(app) } }
@@ -171,7 +172,7 @@ fun AppList(
         }
         // The very last row: Seelie's own settings app (Serenitea), like Niagara's settings at the end.
         item(key = "settings") {
-            ActionRow(R.drawable.ic_settings, "Seelie settings") { SeelieSettings.open(context) }
+            ActionRow(R.drawable.ic_settings_filled, "Seelie settings") { SeelieSettings.open(context) }
         }
     }
 }
@@ -231,13 +232,15 @@ private fun ActionRow(@DrawableRes icon: Int, label: String, onClick: () -> Unit
             .padding(start = ROW_START),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // "Blocky and full" like Niagara's (his ask, 23 Oct): a solid rounded square in a soft pastel of the accent,
+        // with a dark, filled icon, instead of a see-through circle with a thin outline icon.
         Box(
             Modifier
                 .size(44.dp)
-                .background(look.panel, CircleShape),
+                .background(lerp(look.accent, Color.White, 0.55f), RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(painterResource(icon), contentDescription = null, tint = look.text, modifier = Modifier.size(22.dp))
+            Icon(painterResource(icon), contentDescription = null, tint = look.sheet.copy(alpha = 1f), modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(20.dp))
         Text(label, style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp, shadow = look.shadow))
