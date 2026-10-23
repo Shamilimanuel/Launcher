@@ -58,6 +58,10 @@ private val WAVE_REACH = 90.dp
 private val FINGER_GAP = 30.dp
 /** How wide the wave's hill is, in letters ("sigma" of a Gaussian bell): ~8, so most of the rail moves a little. */
 private const val WAVE_WIDTH = 8f
+/** How strongly letters near the thumb are pulled towards it vertically (0 = not at all, 1 = onto the finger). */
+private const val VERTICAL_PULL = 0.38f
+/** How many letters around the thumb feel that vertical pull (a narrower bell than the sideways wave). */
+private const val VERTICAL_WIDTH = 2.6f
 /** How much bigger the letter under the finger gets (Niagara: barely). */
 private const val WAVE_GROW = 0.08f
 /** Width of the letter column; the touch strip around it is wider and runs to the screen edge. */
@@ -165,9 +169,13 @@ fun LetterRail(
                         // graphicsLayer moves/scales while drawing only, so the wave stays smooth (no re-layout).
                         .graphicsLayer {
                             val slot = railHeight / RAIL.size
-                            val lettersAway = abs((i + 0.5f) * slot - fingerY) / slot
+                            val center = (i + 0.5f) * slot
+                            val lettersAway = abs(center - fingerY) / slot
                             val pull = wave * bell(lettersAway)
                             translationX = -reachPx(fingerX) * pull
+                            // Like Niagara, the letters near the thumb are also pulled towards it up and down:
+                            // they squeeze around your finger and slide along as it moves (his ask, 23 Oct).
+                            translationY = (fingerY - center) * VERTICAL_PULL * wave * nearBell(lettersAway)
                             scaleX = 1f + WAVE_GROW * pull
                             scaleY = 1f + WAVE_GROW * pull
                         },
@@ -216,7 +224,11 @@ fun LetterRail(
 private fun bell(lettersAway: Float): Float =
     exp(-(lettersAway * lettersAway) / (2 * WAVE_WIDTH * WAVE_WIDTH))
 
-/** The wave's reach: the base amount, or just left of the thumb once it has dragged further left than that. */
+/** The narrower bell for the up-and-down pull: only the few letters right around the thumb. */
+private fun nearBell(lettersAway: Float): Float =
+    exp(-(lettersAway * lettersAway) / (2 * VERTICAL_WIDTH * VERTICAL_WIDTH))
+
+/** The wave's reach:the base amount, or just left of the thumb once it has dragged further left than that. */
 private fun Density.reachPx(fingerX: Float): Float {
     val inward = (LETTERS_WIDTH.toPx() / 2 - fingerX).coerceAtLeast(0f)
     return maxOf(WAVE_REACH.toPx(), inward + FINGER_GAP.toPx())
