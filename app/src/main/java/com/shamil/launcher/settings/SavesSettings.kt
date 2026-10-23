@@ -63,7 +63,10 @@ import kotlinx.coroutines.withContext
  */
 
 @Composable
-fun ColumnScope.SavesSettingsContent() {
+fun ColumnScope.SavesSettingsContent(
+    /** false on the Themes page ("Your themes" section): no intro text, no own heading. */
+    intro: Boolean = true,
+) {
     val context = LocalContext.current
     val look = LocalLauncherLook.current
     val store = remember { SavesStore.get(context) }
@@ -82,10 +85,11 @@ fun ColumnScope.SavesSettingsContent() {
         }
     }
 
-    Hint("Save your whole look (theme, font, text colours, icons, home style, clock, stats, music card and toggles) under a name. Give a save its own wallpaper, and switch between them in one tap.")
-    SaveButton("Save current look") { creating = true }
+    if (intro) Hint("Save your whole look (theme, font, text colours, icons, home style, clock, stats, music card and toggles) under a name. Give a save its own wallpaper, and switch between them in one tap.")
+    SaveButton("+ Save current look as a theme") { creating = true }
 
-    SectionLabel(if (store.saves.isEmpty()) "No saves yet" else "My saves · ${store.saves.size}")
+    if (intro) SectionLabel(if (store.saves.isEmpty()) "No saves yet" else "Your themes · ${store.saves.size}")
+    else if (store.saves.isEmpty()) Hint("Nothing saved yet. Your saved looks show up here, the way Niagara's \"your themes\" do.")
     store.saves.forEach { save ->
         SaveCard(
             save = save,

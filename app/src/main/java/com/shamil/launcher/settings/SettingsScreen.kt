@@ -150,7 +150,7 @@ private class SettingHit(
 }
 
 private val SETTINGS_INDEX = listOf(
-    SettingHit("My saves", "Look", listOf(Page.Look, Page.Saves), R.drawable.ic_star, Geo, "save saves opslaan saved looks profile profiel preset wallpaper achtergrond"),
+    SettingHit("Your themes (saves)", "Look · Themes", listOf(Page.Look, Page.Themes), R.drawable.ic_star, Geo, "save saves opslaan saved looks profile profiel preset wallpaper achtergrond"),
     SettingHit("Home style (bundles)", "Look", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_home_filled, Electro, "home style bundle bundles glass floating gold minimal spirit transparent see-through doorzichtig card kaart spacing edge"),
     SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
     SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
@@ -282,7 +282,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 Page.Look -> PageFrame("Serenitea", "Look", onBack = ::pop, preview = true) {
                     // The bundles: clock, date, the line under it and the widget card as one matching set.
                     val homeStyle = HomeStyleStore.get(LocalContext.current)
-                    GroupCard(R.drawable.ic_star, Geo, "My saves", SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Save your look, with its own wallpaper" else "$it saved looks" }) { push(Page.Saves) }
+                    GroupCard(R.drawable.ic_star, Geo, "Your themes", SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Save your look as a theme, with its own wallpaper" else "$it saved · plus the built-in themes" }) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_home_filled, Electro, "Home style", homeStyle.bundle.title + if (homeStyle.isCustom) " · custom" else "") { push(Page.HomeStyle) }
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
@@ -290,7 +290,11 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     GroupCard(R.drawable.ic_wallpaper, Dendro, "Backgrounds", "Living backgrounds", soon = true)
                 }
                 Page.Themes -> PageFrame("Look", "Themes", onBack = ::pop, preview = true) {
-                    Hint("A theme sets the colours and font of all of Seelie. Tap one and the preview changes. Backgrounds, icons and clocks per theme come later.")
+                    // Like Niagara's "your themes": his saved looks first (save the current one, apply, rename…), then the built-in ones.
+                    SectionLabel(SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Your themes" else "Your themes · $it" })
+                    SavesSettingsContent(intro = false)
+                    SectionLabel("Built-in themes")
+                    Hint("A theme sets the colours and font of all of Seelie. Tap one and the preview changes.")
                     // First: "Match my wallpaper" (colours from his own wallpaper), then the built-in themes.
                     (listOfNotNull(looks.wallpaperLook) + SeelieThemes).chunked(2).forEach { pair ->
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
