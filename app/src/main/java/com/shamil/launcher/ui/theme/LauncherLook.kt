@@ -33,6 +33,8 @@ data class LauncherLook(
     val clockWeight: FontWeight,
     /** App icon size, 1 = Niagara's 44dp. Set in Seelie settings → Look → Icons, not by the theme. */
     val iconScale: Float = 1f,
+    /** The A–Z letters' colour; Unspecified = the same as [text]. Set in Look → Fonts. */
+    val rail: Color = Color.Unspecified,
 ) {
     /** The soft shadow behind all text, so it stays readable on any wallpaper. */
     val shadow: Shadow get() = Shadow(color = textShadow, blurRadius = 8f)

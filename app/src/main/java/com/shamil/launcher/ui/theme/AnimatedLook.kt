@@ -23,5 +23,6 @@ fun animatedLook(target: LauncherLook): LauncherLook {
         sheet = glide(target.sheet, "sheet"),
         sheetTop = glide(target.sheetTop, "sheetTop"),
         card = glide(target.card, "card"),
+        rail = if (target.rail == Color.Unspecified) Color.Unspecified else glide(target.rail, "rail"),
     )
 }

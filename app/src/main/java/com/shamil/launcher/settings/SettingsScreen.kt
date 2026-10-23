@@ -150,9 +150,9 @@ private val SETTINGS_INDEX = listOf(
     SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
     SettingHit("Icon pack and style", "Look", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "icons iconen pack darko themed glass pictogram"),
     SettingHit("Icon size", "Look · Icons", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "size grootte bigger smaller groter kleiner"),
-    SettingHit("Clock style", "Look · Clock & date", listOf(Page.Look, Page.Clock), R.drawable.ic_schedule, Geo, "clock klok time tijd neon words woorden colon gold"),
-    SettingHit("Date style", "Look · Clock & date", listOf(Page.Look, Page.Clock), R.drawable.ic_schedule, Geo, "date datum day dag stamp pill capitals"),
-    SettingHit("Glance line style", "Look · Clock & date", listOf(Page.Look, Page.Clock), R.drawable.ic_sunny, Geo, "glance weather weer battery batterij line regel glow pill"),
+    SettingHit("Clock style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_schedule, Geo, "clock klok time tijd neon words woorden colon gold"),
+    SettingHit("Date style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_schedule, Geo, "date datum day dag stamp pill capitals"),
+    SettingHit("Glance line style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_sunny, Geo, "glance weather weer battery batterij line regel glow pill"),
     SettingHit("Stats card", "Home screen", listOf(Page.Home, Page.Stats), R.drawable.ic_battery_full, Hydro, "stats statistieken battery batterij memory geheugen storage opslag rings ringen uptime wifi temperature temperatuur weather fahrenheit celsius"),
     SettingHit("Widget stack", "Home screen", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "widget widgets stack calendar kalender month maand gauges notes notities week"),
     SettingHit("Add a widget from an app", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets, Page.WidgetPicker), R.drawable.ic_widgets, Pyro, "app widget toevoegen add spotify agenda"),
@@ -202,7 +202,7 @@ private fun SettingsSearch(query: String, onQuery: (String) -> Unit) {
 
 /** Pages other screens can open settings on, by name ([SeelieSettings.open] with a page). */
 private val START_PAGES = mapOf(
-    SeelieSettings.PAGE_CLOCK to listOf(Page.Look, Page.Clock),
+    SeelieSettings.PAGE_CLOCK to listOf(Page.Look, Page.HomeStyle),
     SeelieSettings.PAGE_WIDGETS to listOf(Page.Home, Page.Widgets),
     SeelieSettings.PAGE_WIDGET_PICKER to listOf(Page.Home, Page.Widgets, Page.WidgetPicker),
 )
@@ -275,7 +275,6 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     GroupCard(R.drawable.ic_home_filled, Electro, "Home style", homeStyle.bundle.title + if (homeStyle.isCustom) " · custom" else "") { push(Page.HomeStyle) }
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
-                    GroupCard(R.drawable.ic_schedule, Geo, "Clock & date", ClockStore.get(LocalContext.current).clockStyle.label) { push(Page.Clock) }
                     GroupCard(R.drawable.ic_apps, Cryo, "Icons", "Icon pack and icon size") { push(Page.Icons) }
                     GroupCard(R.drawable.ic_wallpaper, Dendro, "Backgrounds", "Living backgrounds", soon = true)
                 }
@@ -290,6 +289,8 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     }
                 }
                 Page.Fonts -> PageFrame("Look", "Fonts", onBack = ::pop, preview = true) {
+                    TextColourSettings(looks)
+                    SectionLabel("Font")
                     FontRow("Theme font", "Whatever the theme comes with", current.font, selected = looks.fontId == null) { looks.setFont(null) }
                     SeelieFonts.forEach { font ->
                         FontRow(font.name, null, font.family, selected = looks.fontId == font.id) { looks.setFont(font.id) }

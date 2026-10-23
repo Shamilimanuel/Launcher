@@ -98,7 +98,7 @@ fun HomeTop(
             if (hs.inline) {
                 // Date and glance side by side; a small dot between them unless one of them is a pill.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    DateFace(clocks.dateStyle, time, dateModifier)
+                    BundleDate(time, dateModifier)
                     val pills = hs.dateStyle == "pill" || hs.glanceStyle == "pill"
                     if (!pills) {
                         Spacer(Modifier.width(hs.gap2.dp / 2))
@@ -108,7 +108,7 @@ fun HomeTop(
                     Glance(glance)
                 }
             } else {
-                DateFace(clocks.dateStyle, time, dateModifier)
+                BundleDate(time, dateModifier)
                 Spacer(Modifier.height(hs.gap2.dp))
                 Glance(glance)
             }

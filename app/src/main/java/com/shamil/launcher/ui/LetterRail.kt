@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -160,7 +161,7 @@ fun LetterRail(
             RAIL.forEachIndexed { i, item ->
                 val color = when {
                     item == active -> look.accent
-                    item == STAR || item == DOT || item in present -> look.text
+                    item == STAR || item == DOT || item in present -> if (look.rail != Color.Unspecified) look.rail else look.text
                     else -> look.text.copy(alpha = 0.4f)
                 }
                 Box(

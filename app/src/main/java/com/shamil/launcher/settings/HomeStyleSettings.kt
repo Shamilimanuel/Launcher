@@ -45,6 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shamil.launcher.ui.clock.rememberClockTime
+import android.text.format.DateFormat
+import com.shamil.launcher.ui.clock.ClockFace
+import com.shamil.launcher.ui.clock.ClockStore
+import com.shamil.launcher.ui.clock.ClockStyle
 import com.shamil.launcher.ui.home.BundleDate
 import com.shamil.launcher.ui.home.DATE_LOOKS
 import com.shamil.launcher.ui.home.Gold
@@ -88,11 +92,25 @@ fun ColumnScope.HomeStyleSettingsContent() {
     }
 
     SectionLabel("Clock")
+    // Every clock face as a tile (23 Oct: clock and date now live only here). "Home style" is the one the controls below shape.
+    val clocks = remember { ClockStore.get(context) }
+    val clockTime = rememberClockTime()
+    val is24h = DateFormat.is24HourFormat(context)
+    ClockStyle.entries.chunked(2).forEach { pair ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+            pair.forEach { face ->
+                DateTile(face.label, selected = clocks.clockStyle == face, onClick = { clocks.useClockStyle(face) }) {
+                    ClockFace(face, clockTime, is24h, scale = if (face == ClockStyle.Stacked || face == ClockStyle.Vertical || face == ClockStyle.Words) 0.32f else 0.42f)
+                }
+            }
+            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+    Hint(if (clocks.clockStyle == ClockStyle.Classic) "Shape the Home style clock below." else "Font, size, weight and colour below shape the \"Home style\" face; ${clocks.clockStyle.label} has its own look.")
     Choice("Font", listOf("theme" to "Theme font", "cinzel" to "Cinzel"), s.clockFont) { v -> change { it.copy(clockFont = v) } }
     Slide("Size", s.clockSize, 30f..64f, 33, "sp") { v -> change { it.copy(clockSize = v.roundToInt().toFloat()) } }
     Choice("Weight", listOf("300" to "Light", "600" to "Medium", "800" to "Bold"), nearestWeight(s.clockWeight)) { v -> change { it.copy(clockWeight = v.toInt()) } }
     Choice("Colour", listOf("white" to "White", "accent" to "Accent", "gold" to "Gold", "glass" to "Glass"), s.clockColor) { v -> change { it.copy(clockColor = v) } }
-    Hint("This is the \"Home style\" clock. Fun faces like Neon or In words are in Look → Clock & date.")
 
     SectionLabel("Date")
     // Every date look as a tile that draws today's date in that look (12 of them; he asked for more, 23 Oct).
@@ -388,4 +406,40 @@ private fun ResetChip(text: String, onClick: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 9.dp),
         style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent, fontSize = 14.sp),
     )
+}
+
+/**
+ * Look → Fonts: the text colour for all of Seelie (his ask, 23 Oct: "change the color of our letters") as round swatches,
+ * and whether the A–Z letters follow it or use the accent.
+ */
+@Composable
+internal fun TextColourSettings(looks: com.shamil.launcher.ui.theme.LookStore) {
+    val look = LocalLauncherLook.current
+    SectionLabel("Text colour")
+    Row(Modifier.staggerIn().fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        // First: the theme's own text colour, then every colour he can pick.
+        val options = listOf<Pair<String?, Color>>(null to com.shamil.launcher.ui.theme.themeById(looks.themeId).text) +
+            com.shamil.launcher.ui.theme.LookStore.TEXT_COLOURS.map { (id, c) -> id to (if (c == Color.Unspecified) look.accent else c) }
+        options.forEach { (id, colour) ->
+            val on = looks.textColour == id
+            val press = remember { MutableInteractionSource() }
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .pressFeel(press, colour, 20.dp)
+                    .border(if (on) 2.dp else 1.dp, if (on) look.accent else Color.White.copy(alpha = 0.18f), CircleShape)
+                    .padding(4.dp)
+                    .background(colour, CircleShape)
+                    .clickable(interactionSource = press, indication = null) { looks.useTextColour(id) },
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    on -> Text("✓", style = TextStyle(color = Color(0xFF171C29), fontSize = 15.sp, fontWeight = FontWeight.Bold))
+                    id == null -> Text("T", style = TextStyle(color = Color(0xFF171C29), fontSize = 13.sp, fontWeight = FontWeight.Bold))
+                }
+            }
+        }
+    }
+    Hint("T = your theme's own colour. It changes the clock, date, app names and A–Z.")
+    Choice("A–Z letters", listOf("text" to "Same as text", "accent" to "Accent colour"), looks.railColour) { looks.useRailColour(it) }
 }

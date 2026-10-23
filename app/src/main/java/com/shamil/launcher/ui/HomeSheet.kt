@@ -48,6 +48,7 @@ import com.shamil.launcher.DefaultHome
 import com.shamil.launcher.R
 import com.shamil.launcher.settings.SeelieSettings
 import com.shamil.launcher.ui.clock.ClockStore
+import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.theme.Cinzel
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import com.shamil.launcher.ui.widgets.WidgetStore
@@ -125,7 +126,7 @@ fun HomeWidgetSheet(onEditFavourites: () -> Unit, onDismiss: () -> Unit) {
                 style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
 
             GroupLabel("Clock")
-            Card(R.drawable.ic_schedule, "Clock & date style", clock.clockStyle.label) {
+            Card(R.drawable.ic_schedule, "Clock, date & home style", HomeStyleStore.get(context).bundle.title + " · " + clock.clockStyle.label) {
                 closeThen { SeelieSettings.open(context, SeelieSettings.PAGE_CLOCK) }
             }
 
