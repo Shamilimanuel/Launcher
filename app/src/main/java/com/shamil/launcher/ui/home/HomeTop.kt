@@ -107,10 +107,13 @@ fun HomeTop(
                     Spacer(Modifier.width(if (pills) hs.gap2.dp else hs.gap2.dp / 2))
                     Glance(glance)
                 }
+                // His next event today (tap = agenda), under the line.
+                EventLine(Modifier.padding(top = (hs.gap2 / 2).dp))
             } else {
                 BundleDate(time, dateModifier)
                 Spacer(Modifier.height(hs.gap2.dp))
                 Glance(glance)
+                EventLine(Modifier.padding(top = (hs.gap2 / 2).dp))
             }
         }
         if (hs.spirit) Spirit(Modifier.offset(x = hs.edge.dp + 196.dp, y = 30.dp))

@@ -62,13 +62,18 @@ class HomePrefs private constructor(context: Context) {
         private set
     var showBattery by mutableStateOf(prefs.getBoolean(KEY_BATTERY, true))
         private set
+    /** The event line (next event today) under the glance line. */
+    var showEvent by mutableStateOf(prefs.getBoolean(KEY_EVENT, true))
+        private set
 
     fun useWeather(on: Boolean) { showWeather = on; prefs.edit { putBoolean(KEY_WEATHER, on) } }
     fun useBattery(on: Boolean) { showBattery = on; prefs.edit { putBoolean(KEY_BATTERY, on) } }
+    fun useEvent(on: Boolean) { showEvent = on; prefs.edit { putBoolean(KEY_EVENT, on) } }
 
     companion object {
         private const val KEY_WEATHER = "show_weather"
         private const val KEY_BATTERY = "show_battery"
+        private const val KEY_EVENT = "show_event"
         @Volatile private var instance: HomePrefs? = null
 
         fun get(context: Context): HomePrefs =
@@ -133,6 +138,7 @@ fun HomeWidgetSheet(onEditFavourites: () -> Unit, onDismiss: () -> Unit) {
             GroupLabel("The line under the date")
             ToggleCard(R.drawable.ic_sunny, "Weather", "Temperature and sky, from your rough location", home.showWeather) { home.useWeather(it) }
             ToggleCard(R.drawable.ic_battery_full, "Battery percentage", "With a bolt while charging", home.showBattery) { home.useBattery(it) }
+            ToggleCard(R.drawable.ic_calendar_month, "Next event", "Your next event today; tap it for the agenda", home.showEvent) { home.useEvent(it) }
 
             GroupLabel("Widgets")
             val count = widgets.stack.size
