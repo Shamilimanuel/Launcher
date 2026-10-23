@@ -119,7 +119,7 @@ fun Glance(state: GlanceState, modifier: Modifier = Modifier) {
     }
     // The glance style he picked (Seelie settings → Look → Clock & date): plain, pill, glow or icons only.
     // Its look comes from his home style (Look → Home style): plain, pill or glow, size and colour.
-    val gl = glanceLook(HomeStyleStore.get(context).style, LocalLauncherLook.current)
+    val gl = glanceLook(com.shamil.launcher.ui.home.currentHomeStyle(), LocalLauncherLook.current)
     // What the line shows: both can be switched off in the "Seelie widget" sheet (long-press beside the clock).
     val home = remember { HomePrefs.get(context) }
     Row(

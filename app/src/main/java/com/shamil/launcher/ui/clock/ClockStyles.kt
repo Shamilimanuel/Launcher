@@ -144,6 +144,9 @@ enum class GlanceStyle(val id: String, val label: String, val showsWords: Boolea
  * Remembers his clock, date and glance styles (saved on the phone, so they survive a restart).
  * Compose state, and ONE store for the whole app ([get]), like LookStore: a pick in settings shows on the home at once.
  */
+/** A clock face to draw instead of his own (the theme previews). */
+val LocalClockStyleOverride = androidx.compose.runtime.compositionLocalOf<ClockStyle?> { null }
+
 class ClockStore private constructor(context: Context) {
     private val prefs = context.getSharedPreferences("clock", Context.MODE_PRIVATE)
 

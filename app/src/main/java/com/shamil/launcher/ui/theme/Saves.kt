@@ -59,8 +59,26 @@ class SavesStore private constructor(private val context: Context) {
             themeName = current.name,
         )
         persist(saves + save)
+        Thread { if (copySystemWallpaper(save)) persist(saves) }.start()
         return save
     }
+
+    /**
+     * Copies the phone's current wallpaper into a save, if Android lets Seelie read it (newer Android versions often
+     * don't; then the save shows its colours until he adds a picture). Off the main thread.
+     */
+    private fun copySystemWallpaper(save: SavedLook): Boolean = runCatching {
+        val drawable = WallpaperManager.getInstance(context).drawable ?: return@runCatching false
+        val metrics = context.resources.displayMetrics
+        val w = drawable.intrinsicWidth.takeIf { it > 0 } ?: metrics.widthPixels
+        val h = drawable.intrinsicHeight.takeIf { it > 0 } ?: metrics.heightPixels
+        val k = minOf(1f, 1440f / maxOf(w, h))
+        val bitmap = Bitmap.createBitmap((w * k).toInt().coerceAtLeast(1), (h * k).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        drawable.setBounds(0, 0, bitmap.width, bitmap.height)
+        drawable.draw(android.graphics.Canvas(bitmap))
+        wallpaperFile(save).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        true
+    }.getOrDefault(false)
 
     /** Overwrites a save with the current look (keeps its name and wallpaper). */
     fun update(save: SavedLook) {

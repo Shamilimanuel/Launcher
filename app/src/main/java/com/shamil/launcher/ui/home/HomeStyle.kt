@@ -1,6 +1,9 @@
 package com.shamil.launcher.ui.home
 
 import android.content.Context
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -106,6 +109,13 @@ data class HomeStyle(
 }
 
 /** The five bundles from the bundles page (23 Oct; he said "add every single one"). [id] is saved, never rename it. */
+/** A home style to draw with instead of his own (the theme previews show a save without applying it). */
+val LocalHomeStyleOverride = compositionLocalOf<HomeStyle?> { null }
+
+/** The home style to draw with: a preview's, or his saved one. */
+@Composable
+fun currentHomeStyle(): HomeStyle = LocalHomeStyleOverride.current ?: HomeStyleStore.get(LocalContext.current).style
+
 enum class HomeBundle(val id: String, val title: String, val feel: String, val style: HomeStyle) {
     GLASS(
         "glass", "Glass", "One frosted material for the whole set: glass lettering, matching pills, the same glass card.",

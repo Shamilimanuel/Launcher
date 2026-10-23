@@ -75,7 +75,8 @@ fun ColumnScope.SavesSettingsContent(
     var creating by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<SavedLook?>(null) }
     var pickingFor by remember { mutableStateOf<SavedLook?>(null) }
-    var previewing by remember { mutableStateOf<Int?>(null) }        // the Niagara-style preview, open at this save
+    var previewing by remember { mutableStateOf<Int?>(null) }        // the Niagara-style preview, open at this page (0 = current look)
+    val favourites = rememberFavouriteApps()
     // The photo picker: no permission needed, he picks one picture.
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         val save = pickingFor ?: return@rememberLauncherForActivityResult
@@ -87,7 +88,7 @@ fun ColumnScope.SavesSettingsContent(
     }
 
     if (intro) Hint("Save your whole look (theme, font, text colours, icons, home style, clock, stats, music card and toggles) under a name. Give a save its own wallpaper, and switch between them in one tap.")
-    SaveButton("+ Save current look as a theme") { creating = true }
+    CurrentLookCard(favourites, onPreview = { previewing = 0 }, onSave = { creating = true })
 
     if (intro) SectionLabel(if (store.saves.isEmpty()) "No saves yet" else "Your themes · ${store.saves.size}")
     else if (store.saves.isEmpty()) Hint("Nothing saved yet. Your saved looks show up here, the way Niagara's \"your themes\" do.")
@@ -102,8 +103,9 @@ fun ColumnScope.SavesSettingsContent(
         SaveCard(
             save = save,
             store = store,
+            favourites = favourites,
             onApply = { applySave(save) },
-            onPreview = { previewing = index },
+            onPreview = { previewing = index + 1 },
             onUpdate = {
                 store.update(save)
                 Toast.makeText(context, "\"${save.name}\" now holds your current look", Toast.LENGTH_SHORT).show()
@@ -119,7 +121,17 @@ fun ColumnScope.SavesSettingsContent(
     }
 
     previewing?.let { start ->
-        ThemePreviewDialog(store.saves, start, onApply = { save -> previewing = null; applySave(save) }, onDismiss = { previewing = null })
+        ThemePreviewDialog(
+            saves = store.saves,
+            startPage = start,
+            onApply = { save -> previewing = null; applySave(save) },
+            onDelete = { save ->
+                store.delete(save)
+                Toast.makeText(context, "\"${save.name}\" deleted", Toast.LENGTH_SHORT).show()
+            },
+            onSaveCurrent = { previewing = null; creating = true },
+            onDismiss = { previewing = null },
+        )
     }
     if (creating) NameDialog("Name this look", "My look ${store.saves.size + 1}", onDone = { name ->
         creating = false
@@ -149,35 +161,21 @@ fun ColumnScope.SavesSettingsContent(
 /** One save: its wallpaper thumbnail (or its colours), name, theme, and the actions. */
 @Composable
 private fun SaveCard(
-    save: SavedLook, store: SavesStore,
+    save: SavedLook, store: SavesStore, favourites: List<com.shamil.launcher.apps.AppEntry>,
     onApply: () -> Unit, onPreview: () -> Unit, onUpdate: () -> Unit, onWallpaper: () -> Unit, onRemoveWallpaper: () -> Unit,
     onRename: () -> Unit, onDelete: () -> Unit,
 ) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(20.dp)
     val hasWallpaper = store.hasWallpaper(save)
-    // The thumbnail, decoded small and off the main thread; redone when the saves list changes (a new picture).
-    val thumb by produceState<ImageBitmap?>(null, store.saves, save.id) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val f = store.wallpaperFile(save)
-                if (!f.exists()) null else BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = 8 })?.asImageBitmap()
-            }.getOrNull()
-        }
-    }
+    Box(Modifier.staggerIn().padding(bottom = 12.dp).fillMaxWidth()) {
     Column(
-        Modifier.staggerIn().padding(bottom = 12.dp).fillMaxWidth().clip(shape).background(look.card)
+        Modifier.fillMaxWidth().clip(shape).background(look.card)
             .border(1.dp, Color(save.accent).copy(alpha = 0.5f), shape).padding(12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(width = 56.dp, height = 96.dp).clip(RoundedCornerShape(12.dp))
-                    .background(Brush.verticalGradient(listOf(Color(save.sheet), Color(save.accent).copy(alpha = 0.6f))))
-                    .clickable(onClick = onPreview),
-                contentAlignment = Alignment.Center,
-            ) {
-                thumb?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(width = 56.dp, height = 96.dp)) }
-                if (thumb == null) Box(Modifier.size(18.dp).background(Color(save.accent), CircleShape))
+            Box(Modifier.height(132.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onPreview)) {
+                SavedLookPhone(save, favourites, small = true)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f).clickable(remember { MutableInteractionSource() }, null, onClick = onPreview)) {
@@ -194,7 +192,35 @@ private fun SaveCard(
             if (hasWallpaper) SmallChip("No wallpaper", onRemoveWallpaper)
             SmallChip("Update to current", onUpdate)
             SmallChip("Rename", onRename)
-            SmallChip("Delete", onDelete, colour = Color(0xFFFF9A9A))
+        }
+    }
+        // ✕ quick delete (asks once to be sure).
+        val press = remember { MutableInteractionSource() }
+        Box(
+            Modifier.align(Alignment.TopEnd).padding(6.dp).size(36.dp).pressFeel(press, look.accent, 18.dp).clip(CircleShape)
+                .clickable(press, null, onClick = onDelete),
+            contentAlignment = Alignment.Center,
+        ) { Text("✕", style = TextStyle(color = look.textDim, fontSize = 16.sp)) }
+    }
+}
+
+/** What he has right now, as a little phone, with "+ Save current look as a theme" beside it. */
+@Composable
+private fun CurrentLookCard(favourites: List<com.shamil.launcher.apps.AppEntry>, onPreview: () -> Unit, onSave: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        Modifier.staggerIn().padding(bottom = 12.dp).fillMaxWidth().clip(shape).background(look.card)
+            .border(1.dp, look.accent.copy(alpha = 0.35f), shape).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.height(132.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onPreview)) { CurrentLookPhone(favourites) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Current look", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.text, fontSize = 18.sp))
+            Text("What your home looks like right now · tap it to see it big", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
+            Spacer(Modifier.height(8.dp))
+            SaveButton("+ Save as a theme", filled = true, onClick = onSave)
         }
     }
 }

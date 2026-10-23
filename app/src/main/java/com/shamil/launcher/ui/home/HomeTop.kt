@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.shamil.launcher.ui.clock.LocalClockStyleOverride
 import com.shamil.launcher.ui.Glance
 import com.shamil.launcher.ui.GlanceState
 import com.shamil.launcher.ui.clock.ClockFace
@@ -87,7 +88,7 @@ fun HomeTop(
     dateModifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val hs = HomeStyleStore.get(context).style
+    val hs = currentHomeStyle()
     val clocks = remember { ClockStore.get(context) }
     val is24h = DateFormat.is24HourFormat(context)
     Box(modifier) {
@@ -96,7 +97,7 @@ fun HomeTop(
             // nudged left by ~7% of its size to line up with the date by eye (23 Oct: "the clock needs to be a bit more left").
             val base = LocalLauncherLook.current
             CompositionLocalProvider(LocalLauncherLook provides base.forPart("clock")) {
-                ClockFace(clocks.clockStyle, time, is24h, clockModifier.offset(x = -(hs.clockSize * 0.07f).dp))
+                ClockFace(LocalClockStyleOverride.current ?: clocks.clockStyle, time, is24h, clockModifier.offset(x = -(hs.clockSize * 0.07f).dp))
             }
             Spacer(Modifier.height(hs.gap1.dp))
             if (hs.inline) {
@@ -128,7 +129,7 @@ fun HomeTop(
 @Composable
 fun BundleClock(time: LocalDateTime, is24h: Boolean, modifier: Modifier = Modifier, scale: Float = 1f) {
     val look = LocalLauncherLook.current
-    val hs = HomeStyleStore.get(LocalContext.current).style
+    val hs = currentHomeStyle()
     val cinzel = hs.clockFont == "cinzel"
     val family = when {
         cinzel -> Cinzel
@@ -180,7 +181,7 @@ val DATE_LOOKS = listOf(
 @Composable
 fun BundleDate(time: LocalDateTime, modifier: Modifier = Modifier, scale: Float = 1f, lookOverride: String? = null) {
     val look = LocalLauncherLook.current
-    val hs = HomeStyleStore.get(LocalContext.current).style
+    val hs = currentHomeStyle()
     val dateLook = lookOverride ?: hs.dateStyle
     val locale = Locale.getDefault()
     fun format(pattern: String) = time.format(DateTimeFormatter.ofPattern(pattern, locale)).replace(".", "")

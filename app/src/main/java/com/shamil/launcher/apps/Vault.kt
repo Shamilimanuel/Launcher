@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Base64
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -40,6 +41,9 @@ class VaultStore private constructor(context: Context) {
     var unlocked by mutableStateOf(false)
         private set
     /** After 5 wrong PINs in a row: no tries until this moment (uptime ms). */
+    /** How many digits his number PIN has (0 = not known yet), so the pad checks it by itself, no OK needed. Never the PIN itself. */
+    var pinLength by mutableIntStateOf(prefs.getInt(KEY_LENGTH, 0))
+        private set
     var lockedUntil by mutableLongStateOf(0L)
         private set
     private var wrongTries = 0
@@ -101,7 +105,9 @@ class VaultStore private constructor(context: Context) {
             putString(KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
             putString(KEY_HASH, Base64.encodeToString(hash(pin, salt), Base64.NO_WRAP))
             putBoolean(KEY_MODE, password)
+            if (password) remove(KEY_LENGTH) else putInt(KEY_LENGTH, pin.length)
         }
+        pinLength = if (password) 0 else pin.length
         passwordMode = password
         hasPin = true
         unlocked = true
@@ -116,6 +122,11 @@ class VaultStore private constructor(context: Context) {
         val ok = stored.isNotEmpty() && MessageDigest.isEqual(hash(pin, salt), stored)
         if (ok) {
             wrongTries = 0
+            // A PIN made before this existed: learn its length now, so next time no OK is needed.
+            if (!passwordMode && pinLength == 0) {
+                pinLength = pin.length
+                prefs.edit { putInt(KEY_LENGTH, pin.length) }
+            }
             unlocked = true
         } else if (++wrongTries >= 5) {
             wrongTries = 0
@@ -151,6 +162,7 @@ class VaultStore private constructor(context: Context) {
         private const val KEY_SALT = "pin_salt"
         private const val KEY_FINGER = "fingerprint"
         private const val KEY_MODE = "password_mode"
+        private const val KEY_LENGTH = "pin_length"
         @Volatile private var instance: VaultStore? = null
 
         fun get(context: Context): VaultStore =

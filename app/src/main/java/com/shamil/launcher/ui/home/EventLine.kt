@@ -98,7 +98,7 @@ fun EventLine(modifier: Modifier = Modifier) {
         }
     }
 
-    val gl = glanceLook(HomeStyleStore.get(context).style, look)
+    val gl = glanceLook(currentHomeStyle(), look)
     val text = TextStyle(fontFamily = look.font, color = gl.color, fontSize = gl.size, fontWeight = gl.weight, shadow = gl.shadow)
     val noRipple = remember { MutableInteractionSource() }
 

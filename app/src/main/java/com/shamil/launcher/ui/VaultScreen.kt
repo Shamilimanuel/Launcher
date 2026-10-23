@@ -353,9 +353,11 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
         onDigit = {
             if (entry.length < 6) entry += it
             message = null
+            // The last digit checks it by itself, like a phone's lock screen.
+            if (vault.pinLength > 0 && entry.length == vault.pinLength) check()
         },
         onDelete = { entry = entry.dropLast(1) },
-        doneLabel = if (entry.length >= 4) "OK" else null,
+        doneLabel = if (vault.pinLength == 0 && entry.length >= 4) "OK" else null,
         onDone = { check() },
         onFinger = if (canFinger) ({ askFinger() }) else null,
     )

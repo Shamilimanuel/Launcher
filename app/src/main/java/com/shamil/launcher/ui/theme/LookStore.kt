@@ -77,24 +77,7 @@ class LookStore private constructor(private val context: Context) {
 
     /** The look to show: the theme, with his font, icon size and text colours swapped in. */
     val look: LauncherLook
-        get() {
-            val theme = currentTheme
-            val withFont = fontId?.let { theme.copy(font = fontById(it)) } ?: theme
-            val base = withFont.copy(iconScale = iconScale)
-            val text = TEXT_COLOURS[textColour]?.let { if (it == Color.Unspecified) base.accent else it }
-            // "Menus & settings" decides the colour of everything that isn't one of the home's parts.
-            val coloured = if (text == null || MENUS !in colourParts) base else base.copy(
-                text = text,
-                textDim = text.copy(alpha = 0.82f),
-            )
-            val parts = if (text == null) emptyMap() else colourParts.filter { it != MENUS }.associateWith { text }
-            val rail = when {
-                railColour == "accent" -> coloured.accent
-                text != null && "rail" in colourParts -> text
-                else -> base.text
-            }
-            return coloured.copy(partText = parts, rail = rail)
-        }
+        get() = build(currentTheme, fontId, iconScale, textColour, colourParts, railColour)
 
     /**
      * The pack Seelie should really draw with: his pick if it's still installed, else the first pack on the phone
@@ -153,6 +136,25 @@ class LookStore private constructor(private val context: Context) {
     }
 
     companion object {
+        /** The look recipe: [theme] with a font, icon size and text colours swapped in (also used by the theme previews). */
+        fun build(theme: LauncherLook, fontId: String?, iconScale: Float, textColour: String?, colourParts: Set<String>, railColour: String): LauncherLook {
+            val withFont = fontId?.let { theme.copy(font = fontById(it)) } ?: theme
+            val base = withFont.copy(iconScale = iconScale)
+            val text = TEXT_COLOURS[textColour]?.let { if (it == Color.Unspecified) base.accent else it }
+            // "Menus & settings" decides the colour of everything that isn't one of the home's parts.
+            val coloured = if (text == null || MENUS !in colourParts) base else base.copy(
+                text = text,
+                textDim = text.copy(alpha = 0.82f),
+            )
+            val parts = if (text == null) emptyMap() else colourParts.filter { it != MENUS }.associateWith { text }
+            val rail = when {
+                railColour == "accent" -> coloured.accent
+                text != null && "rail" in colourParts -> text
+                else -> base.text
+            }
+            return coloured.copy(partText = parts, rail = rail)
+        }
+
         /** Saved as [iconPack] when he picks "Original icons". */
         const val NO_PACK = "none"
         private const val KEY_THEME = "theme"
