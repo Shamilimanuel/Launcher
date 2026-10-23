@@ -96,55 +96,12 @@ fun ColumnScope.AppWidgetPickerContent(onAdded: () -> Unit) {
         }
     }
 
-    // Adding: the widget waiting for Android's permission answer.
-    var pending by remember { mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null) }
-
-    fun finish(id: Int, info: AppWidgetProviderInfo) {
+    // Connect the chosen widget (permission + its own setup), then put it at the end of his stack.
+    val connect = rememberWidgetConnector { id, info ->
         store.addApp(id, WidgetSize.forMinHeight((info.minHeight / density).roundToInt()))
         onAdded()
     }
-
-    // Step 2: the widget's own setup screen (which calendar, which city…), if it has one and it isn't optional.
-    fun setUp(id: Int, info: AppWidgetProviderInfo) {
-        val optional = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
-            info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
-        val relay = context as? WidgetSetupResults
-        if (info.configure == null || optional || relay == null || context !is Activity) {
-            finish(id, info)
-            return
-        }
-        relay.onWidgetSetupDone = { ok -> if (ok) finish(id, info) else SeelieWidgetHost.delete(context, id) }
-        try {
-            SeelieWidgetHost.host(context).startAppWidgetConfigureActivityForResult(context, id, 0, relay.widgetSetupRequestCode, null)
-        } catch (e: Exception) {
-            // Some widgets refuse to open their setup from a launcher; place them anyway.
-            relay.onWidgetSetupDone = null
-            finish(id, info)
-        }
-    }
-
-    // Step 1b: Android's "Allow Seelie to create widgets?" question.
-    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val (id, info) = pending ?: return@rememberLauncherForActivityResult
-        pending = null
-        if (result.resultCode == Activity.RESULT_OK) setUp(id, info) else SeelieWidgetHost.delete(context, id)
-    }
-
-    // Step 1: get a number for the new widget from Android and connect it to the chosen widget.
-    fun add(info: AppWidgetProviderInfo) {
-        val id = SeelieWidgetHost.host(context).allocateAppWidgetId()
-        if (SeelieWidgetHost.manager(context).bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)) {
-            setUp(id, info)
-        } else {
-            pending = id to info
-            askPermission.launch(
-                Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
-                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.profile)
-            )
-        }
-    }
+    fun add(info: AppWidgetProviderInfo) = connect(info)
 
     Hint("Real widgets from your apps. The first time, Android asks if Seelie may show them; some widgets then ask for their own setup.")
     val list = items
@@ -202,4 +159,60 @@ private fun cellsOf(info: AppWidgetProviderInfo, density: Float): String {
     // Older Android: the classic formula, cells = (dp + 30) / 70.
     fun cells(px: Int) = (((px / density) + 30) / 70).roundToInt().coerceAtLeast(1)
     return "${cells(info.minWidth)}×${cells(info.minHeight)}"
+}
+
+/**
+ * The steps to connect a widget from another app to Seelie, as one function you call with the widget to connect:
+ * 1. ask Android for a new widget number and connect it (Android asks "Allow Seelie to create widgets?" if needed),
+ * 2. open the widget's own setup screen if it has one,
+ * then [onConnected] gets the new number. Cancelled anywhere = the number is given back to Android.
+ * Used by the picker (add) and by Reset (a fresh start for a stuck widget).
+ */
+@Composable
+fun rememberWidgetConnector(onConnected: (Int, AppWidgetProviderInfo) -> Unit): (AppWidgetProviderInfo) -> Unit {
+    val context = LocalContext.current
+    // The widget waiting for Android's permission answer.
+    var pending by remember { mutableStateOf<Pair<Int, AppWidgetProviderInfo>?>(null) }
+
+    // Step 2: the widget's own setup screen (which calendar, which city...), if it has one and it isn't optional.
+    fun setUp(id: Int, info: AppWidgetProviderInfo) {
+        val optional = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            info.widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0
+        val relay = context as? WidgetSetupResults
+        if (info.configure == null || optional || relay == null || context !is Activity) {
+            onConnected(id, info)
+            return
+        }
+        relay.onWidgetSetupDone = { ok -> if (ok) onConnected(id, info) else SeelieWidgetHost.delete(context, id) }
+        try {
+            SeelieWidgetHost.host(context).startAppWidgetConfigureActivityForResult(context, id, 0, relay.widgetSetupRequestCode, null)
+        } catch (e: Exception) {
+            // Some widgets refuse to open their setup from a launcher; place them anyway.
+            relay.onWidgetSetupDone = null
+            onConnected(id, info)
+        }
+    }
+
+    // Step 1b: Android's "Allow Seelie to create widgets?" question.
+    val askPermission = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val (id, info) = pending ?: return@rememberLauncherForActivityResult
+        pending = null
+        if (result.resultCode == Activity.RESULT_OK) setUp(id, info) else SeelieWidgetHost.delete(context, id)
+    }
+
+    // Step 1: a new number from Android, connected to the chosen widget.
+    return { info ->
+        val id = SeelieWidgetHost.host(context).allocateAppWidgetId()
+        if (SeelieWidgetHost.manager(context).bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)) {
+            setUp(id, info)
+        } else {
+            pending = id to info
+            askPermission.launch(
+                Intent(AppWidgetManager.ACTION_APPWIDGET_BIND)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
+                    .putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER_PROFILE, info.profile)
+            )
+        }
+    }
 }

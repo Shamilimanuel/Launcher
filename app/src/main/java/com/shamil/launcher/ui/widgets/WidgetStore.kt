@@ -126,6 +126,14 @@ class WidgetStore private constructor(context: Context) {
         }
     }
 
+    /** Reset: puts the fresh copy [newId] where [old] was, with the same size. */
+    fun replaceApp(old: StackEntry.App, newId: Int) {
+        val size = sizeOf(old)
+        appSizes = appSizes - old.appWidgetId + (newId to size)
+        saveSizes()
+        save(stack.map { if (it == old) StackEntry.App(newId) else it })
+    }
+
     fun sizeOf(entry: StackEntry): WidgetSize = (entry as? StackEntry.App)?.let { appSizes[it.appWidgetId] } ?: WidgetSize.MEDIUM
 
     /** How tall this page of the stack is ([builtIn] = how tall Seelie's own widgets are right now). */

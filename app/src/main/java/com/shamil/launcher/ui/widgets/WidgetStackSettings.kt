@@ -132,6 +132,13 @@ private fun AppStackRow(
             Triple(info.loadLabel(pm), pm.getApplicationLabel(app).toString(), pm.getApplicationIcon(app).toBitmap(96, 96).asImageBitmap())
         }.getOrNull()
     }
+    // Reset: a fresh start for a stuck widget (23 Oct, his Genshin widget kept showing an old error). Android gives it
+    // a new number, the app draws it from scratch, and it takes the old one's place and size.
+    val providerInfo = remember(entry.appWidgetId) { runCatching { SeelieWidgetHost.manager(context).getAppWidgetInfo(entry.appWidgetId) }.getOrNull() }
+    val reconnect = rememberWidgetConnector { newId, _ ->
+        store.replaceApp(entry, newId)
+        SeelieWidgetHost.delete(context, entry.appWidgetId)
+    }
     Column(Modifier.padding(bottom = 8.dp)) {
         StackRow(
             icon = {
@@ -143,6 +150,7 @@ private fun AppStackRow(
             tint = look.accent,
             canMoveUp = canMoveUp, canMoveDown = canMoveDown, onUp = onUp, onDown = onDown, onRemove = onRemove,
             bottomGap = false,
+            onReset = providerInfo?.let { info -> { reconnect(info) } },
         )
         // How tall it is on the home screen.
         Row(Modifier.padding(top = 6.dp, start = 4.dp, end = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -159,6 +167,7 @@ private fun StackRow(
     icon: @Composable () -> Unit, title: String, about: String, tint: Color,
     canMoveUp: Boolean, canMoveDown: Boolean, onUp: () -> Unit, onDown: () -> Unit, onRemove: () -> Unit,
     bottomGap: Boolean = true,
+    onReset: (() -> Unit)? = null,
 ) {
     val look = LocalLauncherLook.current
     val shape = RoundedCornerShape(20.dp)
@@ -183,6 +192,7 @@ private fun StackRow(
         // The › arrow turned up and down makes the ↑ / ↓ buttons.
         RoundButton(R.drawable.ic_chevron_right, "Move up", look.text, enabled = canMoveUp, turn = -90f, onClick = onUp)
         RoundButton(R.drawable.ic_chevron_right, "Move down", look.text, enabled = canMoveDown, turn = 90f, onClick = onDown)
+        if (onReset != null) RoundButton(R.drawable.ic_refresh, "Reset", look.accent, onClick = onReset)
         RoundButton(R.drawable.ic_delete, "Remove", SoftRed, onClick = onRemove)
     }
 }
