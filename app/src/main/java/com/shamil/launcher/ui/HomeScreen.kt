@@ -81,6 +81,9 @@ import com.shamil.launcher.apps.rememberAppTweaks
 import com.shamil.launcher.apps.rememberApps
 import com.shamil.launcher.apps.rememberFavourites
 import com.shamil.launcher.ui.widgets.WidgetStack
+import com.shamil.launcher.ui.toggles.QuickTogglesRow
+import com.shamil.launcher.ui.media.MusicCard
+import com.shamil.launcher.ui.toggles.TogglePrefs
 import com.shamil.launcher.ui.home.HomeTop
 import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.clock.SeelieClock
@@ -259,7 +262,15 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     // and scrolls away with them, so it never takes space for good. (Pick widgets in Seelie settings.)
                     // Same left edge as the clock, and the bundle's space above it.
                     WidgetStack(Modifier.padding(start = homeStyle.edge.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
-                    favouriteApps.forEach { app -> AppItem(app) { openMenu(app) } }
+                    // The music card under the widgets, on the same left edge (Home screen → Music card).
+                    MusicCard(Modifier.padding(start = homeStyle.edge.dp, bottom = 8.dp))
+                    // The quick toggles row sits between his favourites, after as many as he chose (Home screen → Quick toggles).
+                    val toggleSlot = remember { TogglePrefs.get(context) }.rowSlot(favouriteApps.size)
+                    favouriteApps.forEachIndexed { i, app ->
+                        if (i == toggleSlot) QuickTogglesRow()
+                        AppItem(app, showNotifications = true) { openMenu(app) }
+                    }
+                    if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                 }
             }
         }

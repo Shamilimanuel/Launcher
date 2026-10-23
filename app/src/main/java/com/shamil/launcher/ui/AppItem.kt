@@ -31,6 +31,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.shamil.launcher.apps.GestureStore
+import com.shamil.launcher.ui.notify.NotificationCard
+import com.shamil.launcher.ui.notify.NotificationLine
+import com.shamil.launcher.ui.notify.rememberAppNotifications
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +84,13 @@ val LocalGestureChooser = staticCompositionLocalOf<(AppEntry) -> Unit> { {} }
  * far enough, and letting go does it. No action yet = the chooser opens, so it's easy to find.
  */
 @Composable
-fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit) {
+fun AppItem(
+    app: AppEntry,
+    highlighted: Boolean = false,
+    /** Favourites show their notifications under the name (+ the full card with quick reply); the A–Z list doesn't. */
+    showNotifications: Boolean = false,
+    onLongPress: () -> Unit,
+) {
     val context = LocalContext.current
     val look = LocalLauncherLook.current
     val haptics = LocalHapticFeedback.current
@@ -94,6 +103,9 @@ fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit
     val popups = LocalPopupHolder.current
     val popupOpen = popups.openKey == app.key
     var dragX by remember { mutableFloatStateOf(0f) }
+    // His new notifications for this app (shared, parsed once per change), and whether their card is open.
+    val notifs = if (showNotifications) rememberAppNotifications()[app.component.packageName].orEmpty() else emptyList()
+    var notifOpen by remember { mutableStateOf(false) }
     var armed by remember { mutableStateOf(false) }
 
     Column {
@@ -160,6 +172,21 @@ fun AppItem(app: AppEntry, highlighted: Boolean = false, onLongPress: () -> Unit
                 },
         )
       }
+        // One or two lines of the newest message under the name; › opens the full card.
+        if (notifs.isNotEmpty()) {
+            NotificationLine(
+                app.component.packageName, notifs,
+                modifier = Modifier.graphicsLayer { translationX = dragX },
+                onExpand = { notifOpen = !notifOpen; popups.close() },
+            )
+        }
+        AnimatedVisibility(
+            visible = notifOpen && notifs.isNotEmpty(),
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            NotificationCard(app, notifs, onClose = { notifOpen = false })
+        }
         AnimatedVisibility(
             visible = popupOpen,
             enter = expandVertically() + fadeIn(),

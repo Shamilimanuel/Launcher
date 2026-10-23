@@ -22,6 +22,9 @@ import com.shamil.launcher.apps.IconPack
 import com.shamil.launcher.apps.SeelieIcons
 import com.shamil.launcher.ui.clock.ClockSettingsContent
 import com.shamil.launcher.ui.search.SearchSettingsContent
+import com.shamil.launcher.ui.toggles.TogglesSettingsContent
+import com.shamil.launcher.ui.notify.NotifSettingsContent
+import com.shamil.launcher.ui.media.MusicSettingsContent
 import com.shamil.launcher.ui.clock.ClockStore
 import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.widgets.WidgetStackSettingsContent
@@ -119,7 +122,7 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Search, Seelie }
+private enum class Page { Top, Look, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -154,6 +157,9 @@ private val SETTINGS_INDEX = listOf(
     SettingHit("Date style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_schedule, Geo, "date datum day dag stamp pill capitals"),
     SettingHit("Glance line style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_sunny, Geo, "glance weather weer battery batterij line regel glow pill"),
     SettingHit("Stats card", "Home screen", listOf(Page.Home, Page.Stats), R.drawable.ic_battery_full, Hydro, "stats statistieken battery batterij memory geheugen storage opslag rings ringen uptime wifi temperature temperatuur weather fahrenheit celsius"),
+    SettingHit("Notifications & quick reply", "Home screen", listOf(Page.Home, Page.Notifications), R.drawable.ic_sticky_note_2, Pyro, "notifications meldingen messages berichten reply antwoorden whatsapp quick reply access toegang"),
+    SettingHit("Music card", "Home screen", listOf(Page.Home, Page.Music), R.drawable.ic_music_note, Electro, "music muziek spotify player speler song nummer album media"),
+    SettingHit("Quick toggles", "Home screen", listOf(Page.Home, Page.Toggles), R.drawable.ic_flashlight_on, Anemo, "toggles wifi bluetooth torch zaklamp quiet stil dnd niet storen volume hotspot location locatie airplane vliegtuig"),
     SettingHit("Widget stack", "Home screen", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "widget widgets stack calendar kalender month maand gauges notes notities week"),
     SettingHit("Add a widget from an app", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets, Page.WidgetPicker), R.drawable.ic_widgets, Pyro, "app widget toevoegen add spotify agenda"),
     SettingHit("Widget card style", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "card kaart glass solid outline"),
@@ -310,8 +316,10 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     val widgets = WidgetStore.get(LocalContext.current).stack.size
                     GroupCard(R.drawable.ic_widgets, Pyro, "Widget stack", if (widgets == 1) "1 widget" else "$widgets widgets") { push(Page.Widgets) }
                     GroupCard(R.drawable.ic_battery_full, Hydro, "Stats card", "Which stats, the weather part, ring style") { push(Page.Stats) }
+                    GroupCard(R.drawable.ic_sticky_note_2, Pyro, "Notifications", "Messages on your favourites, quick reply per app") { push(Page.Notifications) }
+                    GroupCard(R.drawable.ic_flashlight_on, Anemo, "Quick toggles", "Wi-Fi, Bluetooth, Torch, Quiet between your favourites") { push(Page.Toggles) }
                     GroupCard(R.drawable.ic_sunny, Geo, "Glance & weather", "Weather city, what the line shows", soon = true)
-                    GroupCard(R.drawable.ic_music_note, Electro, "Music card", "A player that keeps its spot", soon = true)
+                    GroupCard(R.drawable.ic_music_note, Electro, "Music card", "A player that keeps its spot") { push(Page.Music) }
                 }
                 Page.Widgets -> PageFrame("Home screen", "Widget stack", onBack = ::pop) {
                     WidgetStackSettingsContent(onAddFromApp = { push(Page.WidgetPicker) })
@@ -323,6 +331,15 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 // The real card stays pinned at the top while he changes things below.
                 Page.Stats -> PageFrame("Home screen", "Stats card", onBack = ::pop, pinned = { StatsPreview() }) {
                     StatsSettingsContent()
+                }
+                Page.Music -> PageFrame("Home screen", "Music card", onBack = ::pop) {
+                    MusicSettingsContent()
+                }
+                Page.Notifications -> PageFrame("Home screen", "Notifications", onBack = ::pop) {
+                    NotifSettingsContent()
+                }
+                Page.Toggles -> PageFrame("Home screen", "Quick toggles", onBack = ::pop) {
+                    TogglesSettingsContent()
                 }
                 Page.Search -> PageFrame("Serenitea", "Search & commands", onBack = ::pop) {
                     SearchSettingsContent()
