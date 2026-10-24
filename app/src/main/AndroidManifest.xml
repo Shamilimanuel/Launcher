@@ -58,6 +58,7 @@
             singleTask + clearTaskOnLaunch: there is only ever one home, and pressing Home always lands on it.
             stateNotNeeded: Android may restart it freely without saving anything.
             excludeFromRecents: the home screen doesn't show up in the recent-apps list.
+            portrait: the home stays upright when the phone is turned sideways, like Niagara (his note, 24 Oct).
         -->
         <activity
             android:name=".MainActivity"
@@ -67,6 +68,7 @@
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:resumeWhilePausing="true"
+            android:screenOrientation="portrait"
             android:stateNotNeeded="true"
             android:theme="@style/Theme.Launcher"
             android:windowSoftInputMode="adjustResize">
