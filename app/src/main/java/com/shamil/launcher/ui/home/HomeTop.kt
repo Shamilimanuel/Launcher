@@ -110,7 +110,12 @@ fun HomeTop(
                     // Optical alignment: big digits carry extra empty space on their left ("side bearing"), so a
                     // left-aligned clock is nudged left by ~7% of its size to line up with the date by eye (23 Oct).
                     val nudge = if (lay.alignClock == "left") -(hs.clockSize * 0.07f * lay.clockScale).dp else 0.dp
-                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("clock")) {
+                    // Every face wears his clock colour (Look → Home style), not only Classic (24 Oct: picking Big day or
+                    // Light trail made the colour jump back). Gold and accent tint the face; "glass" stays the text colour.
+                    val clockLook = base.forPart("clock").let { l ->
+                        if (face != ClockStyle.Classic && (hs.clockColor == "accent" || hs.clockColor == "gold")) l.copy(text = l.pick(hs.clockColor)) else l
+                    }
+                    CompositionLocalProvider(LocalLauncherLook provides clockLook) {
                         ClockFace(face, time, is24h, clockModifier.offset(x = nudge), scale = lay.clockScale)
                     }
                 }
