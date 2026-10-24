@@ -99,6 +99,18 @@
             Seelie's notification listener: shows messages on his favourites (+ quick reply), the music card
             and the Quiet toggle. Only works after he switches on "Notification access" for Seelie; stays on the phone.
         -->
+        <!-- "Add to home screen" from a browser or app: Seelie asks, then keeps it as a favourite. -->
+        <activity
+            android:name=".apps.PinShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
+            </intent-filter>
+        </activity>
+
         <!-- One-off Niagara import, sent over adb only (DUMP is a shell/system-only permission). -->
         <receiver
             android:name=".apps.NiagaraImport"

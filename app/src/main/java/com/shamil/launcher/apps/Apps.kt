@@ -149,6 +149,8 @@ object Apps {
         VaultStore.get(context).guard(app.component.packageName, app.label) { launchNow(context, app) }
 
     private fun launchNow(context: Context, app: AppEntry) {
+        // A pinned shortcut (a website from "Add to home screen") opens through its app.
+        if (app.shortcutId != null) return PinnedShortcuts.open(context, app)
         try {
             context.getSystemService(LauncherApps::class.java)
                 .startMainActivity(app.component, app.user, null, null)

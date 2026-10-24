@@ -81,6 +81,12 @@ import com.shamil.launcher.apps.VaultStore
 import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.rememberAppTweaks
 import com.shamil.launcher.apps.rememberApps
+import com.shamil.launcher.apps.PinnedShortcuts
+import com.shamil.launcher.apps.SHORTCUT_KEY
+import com.shamil.launcher.apps.favouriteKey
+import com.shamil.launcher.apps.rememberPinnedShortcuts
+import com.shamil.launcher.apps.shortcutId
+import androidx.compose.material3.AlertDialog
 import com.shamil.launcher.apps.rememberFavourites
 import com.shamil.launcher.ui.widgets.WidgetStack
 import com.shamil.launcher.ui.toggles.QuickTogglesRow
@@ -154,8 +160,13 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         outsideVault.partition { tweaks.isHidden(it.component.packageName) }
     }
     // His favourites, in his order, matched to the installed apps (uninstalled ones are skipped).
-    val favouriteApps = remember(outsideVault, favourites.packages) {
-        favourites.packages.mapNotNull { pkg -> outsideVault.firstOrNull { it.component.packageName == pkg } }
+    // Pinned shortcuts (websites from "Add to home screen") can be favourites too, stored as "shortcut:<package>/<id>".
+    val pinned = rememberPinnedShortcuts()
+    val favouriteApps = remember(outsideVault, favourites.packages, pinned) {
+        favourites.packages.mapNotNull { key ->
+            if (key.startsWith(SHORTCUT_KEY)) pinned.firstOrNull { it.favouriteKey == key }
+            else outsideVault.firstOrNull { it.component.packageName == key }
+        }
     }
     val lettersWithApps = remember(listedApps) { listedApps.map { it.letter }.toSet() }
     // "Suggested" in Edit favourites: the apps he opened most in the last 2 weeks that aren't favourites yet;
@@ -289,7 +300,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("apps")) {
                         favouriteApps.forEachIndexed { i, app ->
                             if (i == toggleSlot) QuickTogglesRow()
-                            AppItem(app, showNotifications = true) { openMenu(app) }
+                            // A website shortcut doesn't show its browser's notifications.
+                            AppItem(app, showNotifications = app.shortcutId == null) { openMenu(app) }
                         }
                         if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                     }
@@ -348,8 +360,12 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 apps = listedApps,
                 favouriteApps = favouriteApps,
                 suggestions = suggestions,
-                onToggle = { favourites.toggle(it.component.packageName) },
-                onReorder = { newOrder -> favourites.setOrder(newOrder.map { it.component.packageName }) },
+                onToggle = {
+                    // Taking a website shortcut out of the favourites also lets go of it (it was only there).
+                    if (it.shortcutId != null && it.favouriteKey in favourites) PinnedShortcuts.unpin(context, it)
+                    favourites.toggle(it.favouriteKey)
+                },
+                onReorder = { newOrder -> favourites.setOrder(newOrder.map { it.favouriteKey }) },
                 onDone = { state.editingFavourites = false },
             )
         }
@@ -400,7 +416,28 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         )
     }
 
-    menuApp?.let { app ->
+    // A website shortcut gets a small menu of its own (the app menu's rename/hide/uninstall would hit its browser).
+    menuApp?.takeIf { it.shortcutId != null }?.let { app ->
+        AlertDialog(
+            onDismissRequest = { menuApp = null },
+            containerColor = LocalLauncherLook.current.sheet,
+            title = { Text(app.label, color = LocalLauncherLook.current.text) },
+            text = { Text("A website shortcut in your favourites.", color = LocalLauncherLook.current.textDim) },
+            confirmButton = {
+                TextButton({
+                    favourites.toggle(app.favouriteKey)
+                    PinnedShortcuts.unpin(context, app)
+                    menuApp = null
+                }) { Text("Remove from favourites", color = Color(0xFFFF9A9A)) }
+            },
+            dismissButton = {
+                TextButton({ menuApp = null; onListLetter(null); state.editingFavourites = true }) {
+                    Text("Edit favourites", color = LocalLauncherLook.current.accent)
+                }
+            },
+        )
+    }
+    menuApp?.takeIf { it.shortcutId == null }?.let { app ->
         val pkg = app.component.packageName
         AppMenuSheet(
             app = app,

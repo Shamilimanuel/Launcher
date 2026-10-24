@@ -2,6 +2,8 @@ package com.shamil.launcher.apps
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,6 +27,9 @@ class Favourites(context: Context) {
     fun toggle(packageName: String) =
         save(if (packageName in packages) packages - packageName else packages + packageName)
 
+    /** Reads the list again (another screen, like "Add to home screen", changed it). */
+    fun reload() { packages = read() }
+
     /** Saves a new order (after dragging favourites around). His order is never re-sorted automatically. */
     fun setOrder(newOrder: List<String>) = save(newOrder)
 
@@ -36,11 +41,17 @@ class Favourites(context: Context) {
         prefs.edit { putString(KEY, list.joinToString("\n")) }
     }
 
-    private companion object {
-        const val KEY = "favourites"
+    companion object {
+        /** Goes up when the list is changed from outside the home, so every open copy reloads it. */
+        var version by mutableIntStateOf(0)
+            private set
+
+        fun changed() { version++ }
+
+        private const val KEY = "favourites"
 
         /** First-run favourites: his Niagara list, in his order. */
-        val STARTING_SET = listOf(
+        private val STARTING_SET = listOf(
             "com.google.android.youtube",
             "com.whatsapp",
             "com.spotify.music",
@@ -60,5 +71,7 @@ class Favourites(context: Context) {
 @Composable
 fun rememberFavourites(): Favourites {
     val context = LocalContext.current.applicationContext
-    return remember { Favourites(context) }
+    val favourites = remember { Favourites(context) }
+    LaunchedEffect(Favourites.version) { if (Favourites.version > 0) favourites.reload() }
+    return favourites
 }
