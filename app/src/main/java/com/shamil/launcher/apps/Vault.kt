@@ -158,7 +158,10 @@ class VaultStore private constructor(context: Context) {
         gameKind = null
     }
 
-    /** Checks a fun-lock code; right = unlocked. */
+    /**
+     * Checks a fun-lock code. Right does NOT unlock yet: the game first plays its success animation, then calls
+     * [unlockAfterGame] (otherwise the vault would jump open mid-sparkle).
+     */
     fun tryGame(code: String): Boolean {
         if (gameKind == null || SystemClock.uptimeMillis() < lockedUntil) return false
         val salt = Base64.decode(prefs.getString(KEY_GAME_SALT, "") ?: "", Base64.NO_WRAP)
@@ -166,12 +169,22 @@ class VaultStore private constructor(context: Context) {
         val ok = stored.isNotEmpty() && MessageDigest.isEqual(hash(code, salt), stored)
         if (ok) {
             wrongTries = 0
-            unlocked = true
+            gameOk = true
         } else if (++wrongTries >= 5) {
             wrongTries = 0
             lockedUntil = SystemClock.uptimeMillis() + 30_000L
         }
         return ok
+    }
+
+    /** Set only by a right [tryGame], so nothing else can open the vault through [unlockAfterGame]. */
+    private var gameOk = false
+
+    /** The fun lock's success animation has played: open up. */
+    fun unlockAfterGame() {
+        if (!gameOk) return
+        gameOk = false
+        unlocked = true
     }
 
     /** The fingerprint check passed (Android did it): unlock. */
@@ -182,6 +195,7 @@ class VaultStore private constructor(context: Context) {
 
     fun lock() {
         unlocked = false
+        gameOk = false
     }
 
     fun useFingerprint(on: Boolean) {

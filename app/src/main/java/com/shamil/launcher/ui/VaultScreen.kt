@@ -2,6 +2,9 @@ package com.shamil.launcher.ui
 
 import androidx.compose.runtime.mutableIntStateOf
 import com.shamil.launcher.ui.vault.TrailPadLayout
+import com.shamil.launcher.ui.vault.FunLockGame
+import com.shamil.launcher.ui.vault.FunLockKind
+import com.shamil.launcher.ui.vault.FunLockSetup
 import com.shamil.launcher.ui.vault.SeelieDotsPadLayout
 import com.shamil.launcher.ui.vault.PinLookStore
 import com.shamil.launcher.ui.vault.PinLook
@@ -109,7 +112,7 @@ fun VaultScreen(allApps: List<AppEntry>, onClose: () -> Unit) {
     ) {
         when {
             !vault.hasPin -> PinSetup(onDone = {})
-            !vault.unlocked -> if (vault.passwordMode) PasswordUnlock(vault) else PinPad(vault)
+            !vault.unlocked -> Unlock(vault)
             else -> VaultContent(vault, allApps, onClose)
         }
     }
@@ -267,6 +270,64 @@ private fun PasswordLayout(
 }
 
 /**
+ * Every unlock screen: his fun lock when he has one (the game shows first, "Use PIN" on it), else the PIN pad or
+ * password. On the PIN screen a small "✦ Fun lock" chip at the top goes back to the game.
+ */
+@Composable
+private fun Unlock(vault: VaultStore, title: String = "Vault") {
+    val kind = FunLockKind.byId(vault.gameKind)
+    var game by remember { mutableStateOf(true) }
+    if (kind != null && game) {
+        FunLockUnlock(vault, kind, title, onUsePin = { game = false })
+        return
+    }
+    Box(Modifier.fillMaxSize()) {
+        if (vault.passwordMode) PasswordUnlock(vault, title) else PinPad(vault, title)
+        if (kind != null) {
+            val look = LocalLauncherLook.current
+            Text("✦ Fun lock", modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp).clip(CircleShape)
+                .border(1.dp, look.accent.copy(alpha = 0.45f), CircleShape).clickable { game = true }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+                style = TextStyle(fontFamily = look.font, color = look.accent, fontSize = 13.sp))
+        }
+    }
+}
+
+/** Unlock with the fun lock: a right code plays the game's success, then opens; wrong ones count like wrong PINs. */
+@Composable
+private fun FunLockUnlock(vault: VaultStore, kind: FunLockKind, title: String, onUsePin: () -> Unit) {
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    var message by remember { mutableStateOf<String?>(null) }
+    var wrongTick by remember { mutableIntStateOf(0) }
+    var okTick by remember { mutableIntStateOf(0) }
+    val canFinger = vault.fingerprint && fingerprintAvailable(context)
+    FunLockGame(
+        kind = kind,
+        title = title,
+        sub = message ?: kind.prompt,
+        codeLength = kind.codeLength,
+        wrongTick = wrongTick,
+        okTick = okTick,
+        onCode = { code ->
+            when {
+                SystemClock.uptimeMillis() < vault.lockedUntil -> { message = "Too many tries. Wait a moment."; wrongTick++ }
+                vault.tryGame(code) -> { message = null; okTick++ }
+                else -> {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Not quite. Try again."
+                    wrongTick++
+                }
+            }
+        },
+        onSuccessShown = { vault.unlockAfterGame() },
+        // The fingerprint doesn't pop up by itself here, so it doesn't cover the game; the button asks for it.
+        onFinger = if (canFinger) ({ askFingerprint(context, vault, title) }) else null,
+        onUsePin = onUsePin,
+    )
+}
+
+/**
  * The code screen for a locked app (or its notifications), over everything. The right code (or fingerprint) opens it;
  * back or ✕ cancels. It never leaves the vault open: it locks again right after.
  */
@@ -284,7 +345,7 @@ fun LockGate(label: String) {
             .background(Brush.verticalGradient(listOf(look.sheetTop.copy(alpha = 0.97f), look.sheet.copy(alpha = 0.99f))))
             .clickable(remember { MutableInteractionSource() }, null) {}
     ) {
-        if (vault.passwordMode) PasswordUnlock(vault, label) else PinPad(vault, label)
+        Unlock(vault, label)
         Box(
             Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape)
                 .clickable { vault.cancelPending() },
@@ -495,9 +556,14 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
     val look = LocalLauncherLook.current
     var adding by remember { mutableStateOf(false) }
     var changingPin by remember { mutableStateOf(false) }
+    var settingFunLock by remember { mutableStateOf(false) }
     var removing by remember { mutableStateOf<AppEntry?>(null) }
     if (changingPin) {
         PinSetup(onDone = { changingPin = false })
+        return
+    }
+    if (settingFunLock) {
+        FunLockSetup(vault, onDone = { settingFunLock = false })
         return
     }
     val inVault = allApps.filter { it.component.packageName in vault }
@@ -554,6 +620,8 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                     VaultSetting("Change code", "A new PIN or password (numbers, or anything you like)") { changingPin = true }
                     val pinLooks = remember { PinLookStore.get(context) }
                     VaultSetting("PIN look: " + pinLooks.look.title, "Tap to try the next look: Compact glass, Seelie dots, Light trail, Round") { pinLooks.next() }
+                    VaultSetting("Fun lock: " + (FunLockKind.byId(vault.gameKind)?.title ?: "off"),
+                        "A little game as an extra way in: elements, seelies or lanterns. Your PIN keeps working.") { settingFunLock = true }
                     Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings.",
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
