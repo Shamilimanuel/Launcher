@@ -1,5 +1,14 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.widgets.SeelieWidgetHost
+import com.shamil.launcher.ui.widgets.StackEntry
+import com.shamil.launcher.ui.widgets.WidgetStore
+import com.shamil.launcher.settings.SeelieSettings
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -98,6 +107,9 @@ fun EditFavouritesScreen(
     onDone: () -> Unit,
 ) {
     val look = LocalLauncherLook.current
+    val context = LocalContext.current
+    val widgets = remember { WidgetStore.get(context) }
+    var removing by remember { mutableStateOf<StackEntry?>(null) }
     val haptics = LocalHapticFeedback.current
     val rowPx = with(LocalDensity.current) { EDIT_ROW.toPx() }
     val listState = rememberLazyListState()
@@ -195,6 +207,15 @@ fun EditFavouritesScreen(
                     )
                 }
 
+                // The widgets on his home: untick one to take it off (asks first), or add another.
+                if (!searching) {
+                    item(key = "h-widgets") { EditSection("Widgets · ${widgets.stack.size}") }
+                    items(widgets.stack, key = { "w-${it.key}" }) { entry ->
+                        WidgetEditRow(entry, modifier = Modifier.animateItem(), onClick = { removing = entry })
+                    }
+                    item(key = "w-add") { AddWidgetRow { SeelieSettings.open(context, SeelieSettings.PAGE_WIDGETS) } }
+                }
+
                 if (suggestions.isNotEmpty() && !searching) {
                     item(key = "h-suggested") { EditSection("Suggested") }
                     items(suggestions, key = { "sug-${it.key}" }) { app ->
@@ -209,6 +230,18 @@ fun EditFavouritesScreen(
                     }
                 }
             }
+        }
+
+        removing?.let { entry ->
+            val name = widgetName(entry)
+            AlertDialog(
+                onDismissRequest = { removing = null },
+                containerColor = look.sheet,
+                title = { Text("Take \"$name\" off your home?", color = look.text) },
+                text = { Text("You can add it again any time with + Add widget.", color = look.textDim) },
+                confirmButton = { TextButton({ widgets.remove(entry); removing = null }) { Text("Remove", color = Color(0xFFFF9A9A)) } },
+                dismissButton = { TextButton({ removing = null }) { Text("Keep", color = look.textDim) } },
+            )
         }
 
         // The letter rail with its wave: ☆ = back to the top (your selection), a letter = jump there.
@@ -341,22 +374,7 @@ private fun EditRow(
             .padding(start = 18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // The checkbox: an outlined rounded square; when checked it fills with the accent and a ✓ springs in.
-        Box(
-            Modifier
-                .size(24.dp)
-                .border(2.dp, if (checked) look.accent else look.textDim.copy(alpha = 0.7f), RoundedCornerShape(7.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (check > 0.01f) {
-                Box(
-                    Modifier.size(24.dp).graphicsLayer { scaleX = check; scaleY = check }.background(look.accent, RoundedCornerShape(7.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("✓", style = TextStyle(color = look.sheet.copy(alpha = 1f), fontSize = 15.sp, fontWeight = FontWeight.Bold))
-                }
-            }
-        }
+        EditCheckbox(checked, check)
         Spacer(Modifier.width(16.dp))
         Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(44.dp * look.iconScale))
         Spacer(Modifier.width(16.dp))
@@ -387,5 +405,110 @@ private fun DonePill(modifier: Modifier, onDone: () -> Unit) {
         Text("✓", style = TextStyle(color = look.sheet.copy(alpha = 1f), fontSize = 18.sp, fontWeight = FontWeight.Bold))
         Spacer(Modifier.width(10.dp))
         Text("Done", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.sheet.copy(alpha = 1f), fontSize = 17.sp))
+    }
+}
+
+/** The checkbox: an outlined rounded square; when checked it fills with the accent and a ✓ springs in ([check] 0–1). */
+@Composable
+private fun EditCheckbox(checked: Boolean, check: Float) {
+    val look = LocalLauncherLook.current
+    Box(
+        Modifier
+            .size(24.dp)
+            .border(2.dp, if (checked) look.accent else look.textDim.copy(alpha = 0.7f), RoundedCornerShape(7.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (check > 0.01f) {
+            Box(
+                Modifier.size(24.dp).graphicsLayer { scaleX = check; scaleY = check }.background(look.accent, RoundedCornerShape(7.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("✓", style = TextStyle(color = look.sheet.copy(alpha = 1f), fontSize = 15.sp, fontWeight = FontWeight.Bold))
+            }
+        }
+    }
+}
+
+/** A widget's name as he knows it: Seelie's own title, or the app widget's own label ("Shortcuts"). */
+@Composable
+private fun widgetName(entry: StackEntry): String {
+    val context = LocalContext.current
+    return remember(entry) {
+        when (entry) {
+            is StackEntry.BuiltIn -> entry.kind.title
+            is StackEntry.App -> runCatching {
+                SeelieWidgetHost.manager(context).getAppWidgetInfo(entry.appWidgetId)?.loadLabel(context.packageManager)
+            }.getOrNull() ?: "Widget"
+        }
+    }
+}
+
+/** One widget on his home, ticked; tapping asks to take it off. Its app's icon (or Seelie's own glyph) and its name. */
+@Composable
+private fun WidgetEditRow(entry: StackEntry, modifier: Modifier, onClick: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val context = LocalContext.current
+    val press = remember { MutableInteractionSource() }
+    val name = widgetName(entry)
+    val appIcon = remember(entry) {
+        (entry as? StackEntry.App)?.let { app ->
+            runCatching {
+                val info = SeelieWidgetHost.manager(context).getAppWidgetInfo(app.appWidgetId) ?: return@runCatching null
+                context.packageManager.getApplicationIcon(info.provider.packageName).toBitmap(96, 96).asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    Row(
+        modifier
+            .staggerIn()
+            .fillMaxWidth()
+            .height(EDIT_ROW)
+            .padding(horizontal = 12.dp)
+            .pressFeel(press, look.accent, 18.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(interactionSource = press, indication = null, onClick = onClick)
+            .padding(start = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        EditCheckbox(checked = true, check = 1f)
+        Spacer(Modifier.width(16.dp))
+        val size = 44.dp * look.iconScale
+        when {
+            appIcon != null -> Image(appIcon, contentDescription = null, modifier = Modifier.size(size))
+            entry is StackEntry.BuiltIn -> Box(
+                Modifier.size(size).background(entry.kind.tint.copy(alpha = 0.22f), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center,
+            ) { Icon(painterResource(entry.kind.icon), null, tint = entry.kind.tint, modifier = Modifier.size(24.dp)) }
+            else -> Box(Modifier.size(size).background(look.card, RoundedCornerShape(14.dp)))
+        }
+        Spacer(Modifier.width(16.dp))
+        Text(name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp))
+    }
+}
+
+/** "+ Add widget": opens Seelie settings on the widget stack (Seelie's own widgets and widgets from apps). */
+@Composable
+private fun AddWidgetRow(onClick: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val press = remember { MutableInteractionSource() }
+    Row(
+        Modifier
+            .staggerIn()
+            .fillMaxWidth()
+            .height(EDIT_ROW)
+            .padding(horizontal = 12.dp)
+            .pressFeel(press, look.accent, 18.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(interactionSource = press, indication = null, onClick = onClick)
+            .padding(start = 58.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(44.dp * look.iconScale).background(look.accent.copy(alpha = 0.22f), RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center,
+        ) { Text("+", style = TextStyle(color = look.accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)) }
+        Spacer(Modifier.width(16.dp))
+        Text("Add widget", style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp))
     }
 }
