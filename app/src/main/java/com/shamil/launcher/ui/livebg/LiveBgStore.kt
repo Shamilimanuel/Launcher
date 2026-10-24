@@ -25,6 +25,11 @@ data class LiveBgStyle(
     val calm: Boolean = true,
     /** 60 frames a second instead of 30 (smoother, about twice the battery). */
     val fps60: Boolean = false,
+    /**
+     * Keep running while battery saver is on, but lighter: calm, 30 fps, no sky shader (24 Oct: his battery saver is
+     * always on, so with a full pause he never saw it).
+     */
+    val inSaver: Boolean = true,
     /** Colour mood: "gold", "pink", "violet" or "green". */
     val mood: String = "pink",
     /** "auto" (from the clock) or a fixed "dawn", "day", "dusk", "night". */
@@ -45,7 +50,7 @@ data class LiveBgStyle(
     fun anythingOn(): Boolean = enabled && fx.any { (id, s) -> s.on && id != "tilt" }
 
     fun toJson(): String = JSONObject().apply {
-        put("enabled", enabled); put("calm", calm); put("fps60", fps60)
+        put("enabled", enabled); put("calm", calm); put("fps60", fps60); put("inSaver", inSaver)
         put("mood", mood); put("time", time); put("weather", weather); put("preset", preset)
         put("fx", JSONObject().apply {
             fx.forEach { (id, s) -> put(id, JSONObject().put("on", s.on).put("density", s.density).put("height", s.height)) }
@@ -74,6 +79,7 @@ data class LiveBgStyle(
                 enabled = o.optBoolean("enabled", base.enabled),
                 calm = o.optBoolean("calm", base.calm),
                 fps60 = o.optBoolean("fps60", base.fps60),
+                inSaver = o.optBoolean("inSaver", base.inSaver),
                 mood = o.optString("mood", base.mood).takeIf { it in MOOD_IDS } ?: base.mood,
                 time = o.optString("time", base.time),
                 weather = o.optString("weather", base.weather),

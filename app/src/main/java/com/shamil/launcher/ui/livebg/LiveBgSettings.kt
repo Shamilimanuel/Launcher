@@ -70,11 +70,17 @@ fun ColumnScope.LiveBgSettingsContent(showPreview: Boolean = true) {
         Spacer(Modifier.height(6.dp))
     }
     Hint("A living layer over your own wallpaper and behind your home: petals, stars, clouds and more. Tap the preview to try Touch sparkle.")
-    if (gate.powerSave) Hint("Battery saver is on, so your home shows just your wallpaper for now. The living background comes back when battery saver turns off.")
+    if (gate.powerSave) Hint(
+        if (s.inSaver) "Battery saver is on, so your home runs the light version: calm, 30 fps, and no clouds, mist, light rays or aurora."
+        else "Battery saver is on, so your home shows just your wallpaper for now (\"In battery saver\" is off below)."
+    )
     if (!gate.animationsOn) Hint("Android's animations are off (Developer options → Animator duration scale), so the living background rests as well.")
 
     SectionLabel("Living background")
     Choice("Living background", ON_OFF, s.enabled.onOff()) { v -> store.change { it.copy(enabled = v == "on") } }
+    Choice("In battery saver", listOf("on" to "Light version", "off" to "Pause"), if (s.inSaver) "on" else "off") { v ->
+        store.change { it.copy(inSaver = v == "on") }
+    }
 
     SectionLabel("Presets")
     LIVE_BG_PRESETS.chunked(3).forEach { row ->

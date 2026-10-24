@@ -81,7 +81,9 @@ internal fun LiveBgLayer(modifier: Modifier, weatherCode: Int?, active: Boolean,
     val store = remember { LiveBgStore.get(context) }
     val style = store.style
     val gate = rememberSystemGate()
-    if (!style.anythingOn() || !gate.animationsOn || (!preview && gate.powerSave)) return
+    // Battery saver: the light version (calm, 30 fps, no sky shader), or nothing if he switched that off.
+    val saver = !preview && gate.powerSave
+    if (!style.anythingOn() || !gate.animationsOn || (saver && !style.inSaver)) return
 
     val world = remember { LiveWorld() }
     // The sky shader needs Android 13; below that (or if it fails to build) the sky effects just don't draw.
@@ -91,9 +93,9 @@ internal fun LiveBgLayer(modifier: Modifier, weatherCode: Int?, active: Boolean,
     val tick = remember { mutableIntStateOf(0) }
 
     SideEffect {
-        world.style = style
+        world.style = if (saver) style.copy(calm = true, fps60 = false) else style
         world.realWeather = weatherKind(weatherCode)
-        world.skyOn = sky != null
+        world.skyOn = sky != null && !saver
     }
     DisposableEffect(controller, world) {
         controller?.world = world
