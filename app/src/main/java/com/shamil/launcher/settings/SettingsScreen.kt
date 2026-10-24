@@ -248,13 +248,15 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                         }
                         return@PageFrame
                     }
-                    SectionLabel("Tap a part of your home")
-                    MiniHome(onPick = { open(it) })
-                    SectionLabel("Everything else")
-                    listOf(Node.Style, Node.Privacy, Node.Saves, Node.About).chunked(2).forEach { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-                            pair.forEach { n -> NodeTile(n) { open(n) } }
-                        }
+                    // A plain list of the pages (24 Oct: he liked the new order but missed the options; reaching them
+                    // through a tiny copy of the home felt cramped and odd). MiniHome is kept in SettingsMap.kt for now.
+                    SectionLabel("Your home")
+                    listOf(Node.Background, Node.Clock, Node.Widgets, Node.Music, Node.Favourites, Node.Rail, Node.Search).forEach { n ->
+                        GroupCard(n.icon, n.tint, n.title, n.sub) { open(n) }
+                    }
+                    SectionLabel("Seelie")
+                    listOf(Node.Style, Node.Privacy, Node.Saves, Node.About).forEach { n ->
+                        GroupCard(n.icon, n.tint, n.title, n.sub) { open(n) }
                     }
                 }
                 else -> {
