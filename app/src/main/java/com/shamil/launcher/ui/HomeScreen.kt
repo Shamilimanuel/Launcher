@@ -1,5 +1,6 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.home.TrailFlow
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.positionInParent
@@ -202,6 +203,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     // The layout editor's choices (Look → Layout), and where the clock is (the light trail starts there).
     val layout = currentHomeLayout()
     var clockMid by remember { mutableFloatStateOf(-1f) }
+    // How tall the scrolling content is (the trail runs to its end).
+    var trailHeight by remember { mutableFloatStateOf(0f) }
     val trailColour = LocalLauncherLook.current.accent
     // The living background (Look → Living background): drawn behind everything, fed with the real weather.
     val liveBg = rememberLiveBgController()
@@ -295,7 +298,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                         // Room at the bottom for the navigation buttons, so the last favourite never hides behind them.
                         .padding(bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
                         // Seelie touch "Light trail" (Look → Layout): a thin gold trail from the clock down past the favourites.
-                        .drawBehind { if (layout.trail && layout.favs && clockMid >= 0f) lightTrail(clockMid, trailColour) }
+                        .drawBehind {
+                            trailHeight = size.height
+                            if (layout.trail && layout.favs && clockMid >= 0f) lightTrail(clockMid, trailColour)
+                        }
                 ) {
                     // The clock, date and glance line scroll away with the favourites too, like Niagara (his 23 Oct ask).
                     // How far down the clock starts is his (Look → Layout; his mockup pick: lower, in thumb reach).
@@ -360,6 +366,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     }
                 }
             }
+            // The light trail's moving light (pulses, a breathing spirit, motes), over the list in its own layer.
+            if (layout.trail && layout.favs && clockMid >= 0f) TrailFlow(clockMid, trailHeight, scroll = { favouritesScroll.value })
         }
 
         KeepAliveFade(visible = listLetter != null && !state.searching) {
