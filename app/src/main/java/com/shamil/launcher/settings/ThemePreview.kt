@@ -82,6 +82,7 @@ import com.shamil.launcher.ui.theme.LookStore
 import com.shamil.launcher.ui.theme.SavedLook
 import com.shamil.launcher.ui.theme.SavesStore
 import com.shamil.launcher.ui.theme.WallpaperTheme
+import com.shamil.launcher.ui.theme.WallpaperStore
 import com.shamil.launcher.ui.theme.themeById
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -204,7 +205,14 @@ internal fun CurrentLookPhone(favourites: List<AppEntry>, modifier: Modifier = M
         HomeStyleStore.get(context).style,
         remember { ClockStore.get(context) }.clockStyle,
     )
-    PhonePreview(p, wallpaper = null, favourites, modifier)
+    // The wallpaper he picked through Seelie, if any (Android won't let us read it otherwise).
+    val store = remember { WallpaperStore.get(context) }
+    val wallpaper by produceState<ImageBitmap?>(null, store.version) {
+        value = withContext(Dispatchers.IO) {
+            runCatching { store.copyFile()?.let { BitmapFactory.decodeFile(it.path, BitmapFactory.Options().apply { inSampleSize = 2 })?.asImageBitmap() } }.getOrNull()
+        }
+    }
+    PhonePreview(p, wallpaper, favourites, modifier)
 }
 
 /** A saved theme as a phone, with its own wallpaper picture if it has one. */

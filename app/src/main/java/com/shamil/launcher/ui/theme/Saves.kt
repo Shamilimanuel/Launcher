@@ -7,7 +7,6 @@ import com.shamil.launcher.ui.livebg.LiveBgStore
 import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,7 +62,8 @@ class SavesStore private constructor(private val context: Context) {
             themeName = current.name,
         )
         persist(saves + save)
-        Thread { if (copySystemWallpaper(save)) persist(saves) }.start()
+        // The wallpaper he picked through Seelie (Android won't let us read it otherwise), else try the phone's own.
+        Thread { if (WallpaperStore.get(context).copyInto(wallpaperFile(save)) || copySystemWallpaper(save)) persist(saves) }.start()
         return save
     }
 
@@ -109,16 +109,7 @@ class SavesStore private constructor(private val context: Context) {
      * Returns false if it couldn't read the picture.
      */
     fun setWallpaper(save: SavedLook, uri: Uri): Boolean = runCatching {
-        val metrics = context.resources.displayMetrics
-        val maxSide = maxOf(metrics.widthPixels, metrics.heightPixels).coerceAtLeast(1080)
-        // First only the size, then decode just big enough (big photos would eat memory).
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxSide) sample *= 2
-        val bitmap = context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
-        } ?: return@runCatching false
+        val bitmap = WallpaperStore.decodeForScreen(context, uri) ?: return@runCatching false
         wallpaperFile(save).outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         persist(saves)   // nudges the screen to show the new thumbnail
         true
@@ -140,6 +131,7 @@ class SavesStore private constructor(private val context: Context) {
                 wallpaperFile(save).inputStream().use {
                     WallpaperManager.getInstance(context).setStream(it, null, true, WallpaperManager.FLAG_SYSTEM)
                 }
+                WallpaperStore.get(context).keep(wallpaperFile(save))
             }
         }
     }
