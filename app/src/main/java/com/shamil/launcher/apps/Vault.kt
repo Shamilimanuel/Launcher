@@ -135,6 +135,45 @@ class VaultStore private constructor(context: Context) {
         return ok
     }
 
+    /**
+     * A fun lock (24 Oct): an EXTRA way in next to the PIN, not instead of it. [gameKind] = "elements", "seelies" or
+     * "lanterns" (null = none). Its code (e.g. "pyro,hydro,electro,cryo") is stored exactly like the PIN: only a salted
+     * slow hash, and wrong tries share the PIN's 5-tries-then-30-seconds rule.
+     */
+    var gameKind by mutableStateOf(prefs.getString(KEY_GAME_KIND, null))
+        private set
+
+    fun setGameLock(kind: String, code: String) {
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        prefs.edit {
+            putString(KEY_GAME_KIND, kind)
+            putString(KEY_GAME_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+            putString(KEY_GAME_HASH, Base64.encodeToString(hash(code, salt), Base64.NO_WRAP))
+        }
+        gameKind = kind
+    }
+
+    fun removeGameLock() {
+        prefs.edit { remove(KEY_GAME_KIND); remove(KEY_GAME_SALT); remove(KEY_GAME_HASH) }
+        gameKind = null
+    }
+
+    /** Checks a fun-lock code; right = unlocked. */
+    fun tryGame(code: String): Boolean {
+        if (gameKind == null || SystemClock.uptimeMillis() < lockedUntil) return false
+        val salt = Base64.decode(prefs.getString(KEY_GAME_SALT, "") ?: "", Base64.NO_WRAP)
+        val stored = Base64.decode(prefs.getString(KEY_GAME_HASH, "") ?: "", Base64.NO_WRAP)
+        val ok = stored.isNotEmpty() && MessageDigest.isEqual(hash(code, salt), stored)
+        if (ok) {
+            wrongTries = 0
+            unlocked = true
+        } else if (++wrongTries >= 5) {
+            wrongTries = 0
+            lockedUntil = SystemClock.uptimeMillis() + 30_000L
+        }
+        return ok
+    }
+
     /** The fingerprint check passed (Android did it): unlock. */
     fun unlockWithFingerprint() {
         wrongTries = 0
@@ -163,6 +202,9 @@ class VaultStore private constructor(context: Context) {
         private const val KEY_FINGER = "fingerprint"
         private const val KEY_MODE = "password_mode"
         private const val KEY_LENGTH = "pin_length"
+        private const val KEY_GAME_KIND = "game_kind"
+        private const val KEY_GAME_SALT = "game_salt"
+        private const val KEY_GAME_HASH = "game_hash"
         @Volatile private var instance: VaultStore? = null
 
         fun get(context: Context): VaultStore =

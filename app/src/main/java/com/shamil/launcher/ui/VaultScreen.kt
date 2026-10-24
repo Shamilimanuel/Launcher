@@ -1,5 +1,8 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.vault.PinLookStore
+import com.shamil.launcher.ui.vault.PinLook
+import com.shamil.launcher.ui.vault.GlassPadLayout
 import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
@@ -359,6 +362,8 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
         onDelete = { entry = entry.dropLast(1) },
         doneLabel = if (vault.pinLength == 0 && entry.length >= 4) "OK" else null,
         onDone = { check() },
+        // As many dots as his PIN has digits (4 until Seelie knows the length), not always six.
+        dotCount = if (vault.pinLength > 0) vault.pinLength else 4,
         onFinger = if (canFinger) ({ askFinger() }) else null,
     )
 }
@@ -391,6 +396,21 @@ private fun fingerprintAvailable(context: android.content.Context): Boolean = wh
 /** The look of every PIN screen: Cinzel title, a line under it, six dots, and a round 3x4 number pad. */
 @Composable
 private fun PadLayout(
+    title: String, sub: String, entry: String, maxDigits: Int,
+    onDigit: (String) -> Unit, onDelete: () -> Unit, doneLabel: String?, onDone: () -> Unit,
+    dotsOffset: Float = 0f, onFinger: (() -> Unit)? = null, dotCount: Int = maxDigits,
+) {
+    // His PIN look (vault settings → PIN look). Compact glass is the default; Round is the first pad.
+    val context = LocalContext.current
+    when (remember { PinLookStore.get(context) }.look) {
+        PinLook.GLASS -> GlassPadLayout(title, sub, entry, dotCount, onDigit, onDelete, doneLabel, onDone, dotsOffset, onFinger)
+        else -> RoundPadLayout(title, sub, entry, maxDigits, onDigit, onDelete, doneLabel, onDone, dotsOffset, onFinger)
+    }
+}
+
+/** The first pad: big round keys, six dots. */
+@Composable
+private fun RoundPadLayout(
     title: String, sub: String, entry: String, maxDigits: Int,
     onDigit: (String) -> Unit, onDelete: () -> Unit, doneLabel: String?, onDone: () -> Unit,
     dotsOffset: Float = 0f, onFinger: (() -> Unit)? = null,
@@ -523,6 +543,8 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                         vault.useFingerprint(!vault.fingerprint)
                     }
                     VaultSetting("Change code", "A new PIN or password (numbers, or anything you like)") { changingPin = true }
+                    val pinLooks = remember { PinLookStore.get(context) }
+                    VaultSetting("PIN look: " + pinLooks.look.title, "Tap to try the next look (Seelie dots and Light trail are coming)") { pinLooks.next() }
                     Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings.",
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
