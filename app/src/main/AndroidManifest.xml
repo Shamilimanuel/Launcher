@@ -99,6 +99,12 @@
             Seelie's notification listener: shows messages on his favourites (+ quick reply), the music card
             and the Quiet toggle. Only works after he switches on "Notification access" for Seelie; stays on the phone.
         -->
+        <!-- One-off Niagara import, sent over adb only (DUMP is a shell/system-only permission). -->
+        <receiver
+            android:name=".apps.NiagaraImport"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+
         <service
             android:name=".notify.SeelieNotificationListener"
             android:exported="true"

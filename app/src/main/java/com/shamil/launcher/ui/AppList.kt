@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shamil.launcher.apps.LaunchStats
 import com.shamil.launcher.DefaultHome
 import com.shamil.launcher.R
 import com.shamil.launcher.settings.SeelieSettings
@@ -65,6 +66,9 @@ import com.shamil.launcher.ui.theme.LocalLauncherLook
 
 /** Sizes measured from Niagara's own layout on his phone (adb uiautomator, 23 Oct; see reference/setup-notes.md). */
 val ROW_START = 46.dp
+
+/** Opens in 14 days before an app moves to the top of its letter. */
+private const val MIN_OPENS_TO_RISE = 3
 
 /**
  * Every app, A–Z, straight on the wallpaper. Opens at [letter] and keeps the top of the
@@ -88,8 +92,17 @@ fun AppList(
     onToggleFavourite: (AppEntry) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
+    // How often each app was opened lately (last 14 days), read again each time the list opens.
+    val context = LocalContext.current
+    val opened = remember(apps, letter == null) { LaunchStats.get(context).mostOpened().toMap() }
     // The apps grouped by letter ("A" -> [Agenda, AliExpress, ...]), plus where each letter's header sits in the list.
-    val sections = remember(apps) { apps.groupBy { it.letter } }
+    // Inside a letter, the apps he uses most come first, like Niagara (24 Oct: "if I use Google a lot it goes on top
+    // of the G"); apps he opened fewer than 3 times stay in A–Z order below them.
+    val sections = remember(apps, opened) {
+        apps.groupBy { it.letter }.mapValues { (_, group) ->
+            group.sortedByDescending { app -> (opened[app.component.packageName] ?: 0).takeIf { it >= MIN_OPENS_TO_RISE } ?: 0 }
+        }
+    }
     val headerIndex = remember(sections) {
         var index = 0
         // After the letters comes the "Seelie" section, so its header is the last stop.
@@ -99,7 +112,6 @@ fun AppList(
     val recentApps = remember(apps) { apps.sortedByDescending { it.installedAt }.take(5) }
     var showRecent by remember { mutableStateOf(false) }
     var showHidden by remember { mutableStateOf(false) }
-    val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
     // Slide-to-open: work out which row is under the thumb while it slides in from the rail.
