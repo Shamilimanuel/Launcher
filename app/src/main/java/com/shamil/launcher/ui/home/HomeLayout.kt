@@ -14,8 +14,9 @@ import org.json.JSONObject
 /*
  * The layout editor (24 Oct): the home as BLOCKS a layout arranges. The base for his all-in-one idea, where a saved
  * theme can hold a whole layout ("a Seelie save and a Smart Launcher save"). Set in Seelie settings → Look → Layout.
- * His picks from the mockup: the Classic and Big day clock faces, the layouts "Seelie now" and "Light trail",
- * the light trail and sparkles touches, and the clock lower on the screen (thumb reach).
+ * His picks from the mockups: the Classic and Big day clock faces, the layouts Seelie now, Spirit hour, Big day,
+ * Calm night and Smart Launcher-ish (grouped favourites), the sparkles touch, and the clock lower on the screen.
+ * (The light trail was tried and removed on his call, 24 Oct.)
  * The strings are what gets saved, so never rename them.
  */
 
@@ -50,8 +51,9 @@ data class HomeLayout(
     val fadeColour: String = "black",
     /** Favourites: "normal", "small" or "text" (no icons, a plain list). */
     val icons: String = "normal",
-    /** Seelie touches: a thin gold light trail with a spirit at its head beside the favourites; sparkles by the clock. */
-    val trail: Boolean = false,
+    /** Favourites grouped under small headings (Social, Media, Tools…), like Smart Launcher's categories. */
+    val group: Boolean = false,
+    /** Seelie touch: sparkles twinkling by the clock. */
     val sparkles: Boolean = false,
     /** The layout he started from ("now", "trail", ...), or "" once changed by hand. Only for the settings page. */
     val preset: String = "now",
@@ -62,7 +64,7 @@ data class HomeLayout(
         put("alignClock", alignClock); put("alignDate", alignDate); put("alignGlance", alignGlance)
         put("clockTop", clockTop.toDouble()); put("clockScale", clockScale.toDouble())
         put("fade", fade); put("fadeReach", fadeReach); put("fadeSoft", fadeSoft); put("fadeColour", fadeColour)
-        put("icons", icons); put("trail", trail); put("sparkles", sparkles); put("preset", preset)
+        put("icons", icons); put("group", group); put("sparkles", sparkles); put("preset", preset)
     }.toString()
 
     companion object {
@@ -86,7 +88,7 @@ data class HomeLayout(
                 fadeSoft = o.optInt("fadeSoft", base.fadeSoft).coerceIn(0, 100),
                 fadeColour = o.optString("fadeColour", base.fadeColour).takeIf { it in FADE_COLOURS } ?: base.fadeColour,
                 icons = o.optString("icons", base.icons).takeIf { it in ICON_STYLES } ?: base.icons,
-                trail = o.optBoolean("trail", base.trail), sparkles = o.optBoolean("sparkles", base.sparkles),
+                group = o.optBoolean("group", base.group), sparkles = o.optBoolean("sparkles", base.sparkles),
                 preset = o.optString("preset", base.preset),
             )
         } catch (e: Exception) {
@@ -99,27 +101,29 @@ data class HomeLayout(
     }
 }
 
-/** A whole layout in one tap (the mockup's Layouts row; he kept "Seelie now" and "Light trail"). */
+/** A whole layout in one tap (the mockup's Layouts row: the ones he kept). */
 enum class LayoutPreset(val id: String, val title: String, val about: String) {
     NOW("now", "Seelie now", "Your home as it was: clock, date, glance line, widgets, favourites."),
-    TRAIL("trail", "Light trail", "Seelie's own: a spirit leads a thin gold trail down beside your favourites, sparkles by the clock, the wallpaper melting into the theme colour."),
+    SPIRIT("spirit", "Spirit hour", "Seelie's own: quiet and centred, a spirit between the hours and minutes, sparkles, the wallpaper melting into the theme colour."),
     BIG_DAY("bigday", "Big day", "The weekday is the clock, centred, with the wallpaper fading below."),
-    CALM("calm", "Calm night", "Wallpaper only at the top, melting into black. No widgets, a calm list.");
+    CALM("calm", "Calm night", "Wallpaper only at the top, melting into black. No widgets, a calm list."),
+    SMART("smart", "Smart Launcher-ish", "Your favourites grouped under headings (Social, Media, Tools…), small icons, a smaller clock up high, no widgets.");
 
     /** The layout itself (keeps his clock height and size). [face] = the clock face it uses, if it picks one. */
     fun apply(from: HomeLayout): HomeLayout = when (this) {
         NOW -> HomeLayout(clockTop = from.clockTop, clockScale = from.clockScale)
-        TRAIL -> HomeLayout(clockTop = from.clockTop, clockScale = from.clockScale, fade = true, fadeReach = 86, fadeSoft = 55,
-            fadeColour = "theme", trail = true, sparkles = true, preset = id)
+        SPIRIT -> HomeLayout(clockTop = from.clockTop, clockScale = from.clockScale, alignClock = "centre", alignDate = "centre",
+            alignGlance = "centre", widgets = false, fade = true, fadeReach = 70, fadeSoft = 65, fadeColour = "theme", sparkles = true, preset = id)
         BIG_DAY -> HomeLayout(clockTop = from.clockTop, clockScale = from.clockScale, alignClock = "centre", alignDate = "centre",
             alignGlance = "centre", widgets = false, fade = true, fadeReach = 72, fadeSoft = 60, fadeColour = "theme", preset = id)
         CALM -> HomeLayout(clockTop = from.clockTop, clockScale = from.clockScale, widgets = false, fade = true, fadeReach = 36,
             fadeSoft = 75, fadeColour = "black", preset = id)
+        SMART -> HomeLayout(clockTop = 0.09f, clockScale = 0.82f, widgets = false, icons = "small", group = true, preset = id)
     }
 
     /** The clock face this layout uses ("thin", "bigday"…), or null to keep his own. */
     val face: String?
-        get() = when (this) { TRAIL -> "thin"; BIG_DAY -> "bigday"; CALM -> "thin"; NOW -> null }
+        get() = when (this) { SPIRIT -> "spiritstack"; BIG_DAY -> "bigday"; CALM -> "thin"; SMART -> "classic"; NOW -> null }
 }
 
 class HomeLayoutStore private constructor(context: Context) {

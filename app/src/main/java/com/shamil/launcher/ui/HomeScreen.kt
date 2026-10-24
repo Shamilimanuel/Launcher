@@ -1,12 +1,14 @@
 package com.shamil.launcher.ui
 
-import com.shamil.launcher.ui.home.TrailFlow
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.produceState
+import com.shamil.launcher.ui.home.GroupHeading
+import com.shamil.launcher.apps.AppCategories
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
-import com.shamil.launcher.ui.home.trailBead
-import com.shamil.launcher.ui.home.lightTrail
 import com.shamil.launcher.ui.home.WallpaperFade
 import com.shamil.launcher.ui.home.currentHomeLayout
 import com.shamil.launcher.ui.home.BLOCK_FAVS
@@ -200,12 +202,13 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The weather/stats line and its card. The card closes when you tap away, press Back or open the list.
     val glance = rememberGlanceState()
-    // The layout editor's choices (Look → Layout), and where the clock is (the light trail starts there).
+    // The layout editor's choices (Look → Layout).
     val layout = currentHomeLayout()
-    var clockMid by remember { mutableFloatStateOf(-1f) }
-    // How tall the scrolling content is (the trail runs to its end).
-    var trailHeight by remember { mutableFloatStateOf(0f) }
-    val trailColour = LocalLauncherLook.current.accent
+    // Grouped layout (Smart Launcher-ish): each favourite's heading, worked out off the main thread.
+    val groupOf by produceState(emptyMap<String, String>(), favouriteApps, layout.group) {
+        value = if (!layout.group) emptyMap()
+        else withContext(Dispatchers.IO) { favouriteApps.associate { it.favouriteKey to AppCategories.of(context, it.component.packageName) } }
+    }
     // The living background (Look → Living background): drawn behind everything, fed with the real weather.
     val liveBg = rememberLiveBgController()
     // His home style: how the clock, date, glance line and widget card look together (one bundle + tweaks).
@@ -297,11 +300,6 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                         .verticalScroll(favouritesScroll)
                         // Room at the bottom for the navigation buttons, so the last favourite never hides behind them.
                         .padding(bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
-                        // Seelie touch "Light trail" (Look → Layout): a thin gold trail from the clock down past the favourites.
-                        .drawBehind {
-                            trailHeight = size.height
-                            if (layout.trail && layout.favs && clockMid >= 0f) lightTrail(clockMid, trailColour)
-                        }
                 ) {
                     // The clock, date and glance line scroll away with the favourites too, like Niagara (his 23 Oct ask).
                     // How far down the clock starts is his (Look → Layout; his mockup pick: lower, in thumb reach).
@@ -315,8 +313,6 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                                 Column(
                                     Modifier
                                         .fillMaxWidth()
-                                        // Where the clock sits, for the light trail that starts there.
-                                        .onGloballyPositioned { clockMid = it.positionInParent().y + it.size.height * 0.28f }
                                         .pointerInput(Unit) {
                                             detectTapGestures(onLongPress = {
                                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -351,23 +347,29 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                                     if (layout.icons == "small") it.copy(iconScale = it.iconScale * 0.7f) else it
                                 }
                                 CompositionLocalProvider(LocalLauncherLook provides appsLook, LocalAppIcons provides (layout.icons != "text")) {
-                                    favouriteApps.forEachIndexed { i, app ->
-                                        if (i == toggleSlot) QuickTogglesRow()
-                                        // The light trail's bead on each favourite (Seelie touch).
-                                        Box(if (layout.trail) Modifier.drawBehind { trailBead(i) } else Modifier) {
+                                    if (layout.group && groupOf.isNotEmpty()) {
+                                        // Grouped (Smart Launcher-ish): under small headings, groups in the order his favourites
+                                        // first reach them, his own order kept inside each group. Toggles go first or last.
+                                        if (toggleSlot == 0) QuickTogglesRow()
+                                        favouriteApps.groupBy { groupOf[it.favouriteKey] ?: AppCategories.OTHER }.forEach { (heading, apps) ->
+                                            GroupHeading(heading)
+                                            apps.forEach { app -> AppItem(app, showNotifications = app.shortcutId == null) { openMenu(app) } }
+                                        }
+                                        if (toggleSlot != 0) QuickTogglesRow()
+                                    } else {
+                                        favouriteApps.forEachIndexed { i, app ->
+                                            if (i == toggleSlot) QuickTogglesRow()
                                             // A website shortcut doesn't show its browser's notifications.
                                             AppItem(app, showNotifications = app.shortcutId == null) { openMenu(app) }
                                         }
+                                        if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                                     }
-                                    if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                                 }
                             }
                         }
                     }
                 }
             }
-            // The light trail's moving light (pulses, a breathing spirit, motes), over the list in its own layer.
-            if (layout.trail && layout.favs && clockMid >= 0f) TrailFlow(clockMid, trailHeight, scroll = { favouritesScroll.value })
         }
 
         KeepAliveFade(visible = listLetter != null && !state.searching) {

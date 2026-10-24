@@ -105,7 +105,8 @@ enum class ClockStyle(val id: String, val label: String, val blurb: String) {
     Words("words", "In words", "“ten past eight”"),
     Neon("neon", "Neon tube", "Glowing, blinking colon"),
     SeelieColon("seelie", "Seelie colon", "A spirit sits in the colon"),
-    BigDay("bigday", "Big day", "The weekday is the clock");
+    BigDay("bigday", "Big day", "The weekday is the clock"),
+    SpiritStack("spiritstack", "Spirit stacked", "Hours, a spirit, minutes");
 
     companion object {
         /** The style saved under [id]; unknown or nothing saved = Classic (today's clock). */
@@ -376,6 +377,18 @@ fun ClockFace(style: ClockStyle, time: LocalDateTime, is24h: Boolean, modifier: 
                     ClockText(month, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent,
                         fontSize = size(0.26f), letterSpacing = 0.14.em, shadow = look.shadow))
                 }
+            }
+        }
+
+        // Spirit hour's face (his pick, 24 Oct): light hours, a breathing spirit, then the minutes in the accent, all centred.
+        ClockStyle.SpiritStack -> {
+            val base = TextStyle(fontFamily = SystemLight, color = look.text, fontSize = size(1.3f), letterSpacing = (-0.01).em,
+                lineHeight = 0.86.em, lineHeightStyle = TightLines, shadow = look.shadow)
+            val em = with(density) { size(1.3f).toDp() }
+            Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+                ClockText(hh, style = base)
+                SeelieSpirit(em * 0.34f, Modifier.padding(vertical = em * 0.04f))
+                ClockText(mm, style = base.copy(color = look.accent, shadow = Shadow(look.accent.copy(alpha = 0.45f), blurRadius = px(20f))))
             }
         }
 

@@ -97,6 +97,8 @@ fun ColumnScope.LayoutSettingsContent(onClockFaces: () -> Unit) {
     Spacer(Modifier.padding(top = 6.dp))
     Choice("Widgets", ON_OFF, lay.widgets.onOff()) { v -> store.change { it.copy(widgets = v == "on") } }
     Choice("Favourites", ON_OFF, lay.favs.onOff()) { v -> store.change { it.copy(favs = v == "on") } }
+    Choice("Group favourites under headings", ON_OFF, lay.group.onOff()) { v -> store.change { it.copy(group = v == "on") } }
+    if (lay.group) Hint("Social, Media, Games, Tools…: Seelie sorts them from what each app says it is. Your own order stays inside each group.")
     Choice("Favourites icons", listOf("normal" to "Normal", "small" to "Small", "text" to "Text only"), lay.icons) { v ->
         store.change { it.copy(icons = v) }
     }
@@ -113,8 +115,7 @@ fun ColumnScope.LayoutSettingsContent(onClockFaces: () -> Unit) {
     }
 
     SectionLabel("Seelie touches")
-    Hint("Little things only Seelie has, from the spirit and the light trail in its icon.")
-    Choice("Light trail", ON_OFF, lay.trail.onOff()) { v -> store.change { it.copy(trail = v == "on") } }
+    Hint("Little things only Seelie has, from the spirit in its icon.")
     Choice("Sparkles by the clock", ON_OFF, lay.sparkles.onOff()) { v -> store.change { it.copy(sparkles = v == "on") } }
     Hint("Coming next: move the clock freely with your finger, turn and tilt it.")
 }
