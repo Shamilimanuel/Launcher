@@ -1,5 +1,11 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.rail.rememberArcRailState
+import com.shamil.launcher.ui.rail.arcRailInput
+import com.shamil.launcher.ui.rail.RailStyle
+import com.shamil.launcher.ui.rail.RailStore
+import com.shamil.launcher.ui.rail.ArcRailLayer
+import com.shamil.launcher.ui.rail.ArcCallbacks
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.produceState
@@ -233,6 +239,20 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     // Slide-to-open: where the thumb is while it slides off the rail onto the list, and the app under it.
     var slideY by remember { mutableStateOf<Float?>(null) }
     var slideTarget by remember { mutableStateOf<AppEntry?>(null) }
+    // The A–Z rail's style (Look → Layout → A–Z rail): Seelie's own "Guide on the arc", or the Niagara-style wave.
+    val railStyle = remember { RailStore.get(context) }.style
+    val arcRail = rememberArcRailState()
+    arcRail.callbacks = ArcCallbacks(
+        onPick = { picked -> onListLetter(if (picked == STAR) null else picked) },
+        onSlide = { slideY = it },
+        onRelease = { slid ->
+            if (slid) slideTarget?.let { Apps.launch(context, it) }
+            slideY = null
+            slideTarget = null
+        },
+        onHoldDot = { vaultOpen = true },
+        buzz = { strong -> haptics.performHapticFeedback(if (strong) HapticFeedbackType.LongPress else HapticFeedbackType.TextHandleMove) },
+    )
 
     // Back steps out one level: search → list → editing favourites → favourites.
     // (The handler registered LAST wins, so they're listed from the outermost level to the innermost.)
@@ -259,6 +279,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     if (popups.openKey != null && !moved && !inside) popups.close()
                 }
             }
+            // Guide on the arc: drags along the curve at the bottom right (taps still reach what's under them).
+            .arcRailInput(arcRail, enabled = railStyle != RailStyle.NIAGARA && !state.searching && !state.editingFavourites && !vaultOpen)
     ) {
         val screenH = maxHeight
 
@@ -443,7 +465,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             LockGate(label)
         }
 
-        if (!state.searching && !state.editingFavourites && !vaultOpen) {
+        if (!state.searching && !state.editingFavourites && !vaultOpen && railStyle != RailStyle.NIAGARA) {
+            ArcRailLayer(arcRail, lettersWithApps)
+        }
+        if (!state.searching && !state.editingFavourites && !vaultOpen && railStyle == RailStyle.NIAGARA) {
             LetterRail(
                 present = lettersWithApps,
                 modifier = Modifier

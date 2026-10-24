@@ -1,5 +1,7 @@
 package com.shamil.launcher.settings
 
+import com.shamil.launcher.ui.rail.RailStyle
+import com.shamil.launcher.ui.rail.RailStore
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -113,6 +115,14 @@ fun ColumnScope.LayoutSettingsContent(onClockFaces: () -> Unit) {
     Choice("Fade colour", listOf("black" to "Black", "theme" to "Theme", "navy" to "Navy"), lay.fadeColour, enabled = lay.fade) { v ->
         store.change { it.copy(fadeColour = v) }
     }
+
+    SectionLabel("A–Z rail")
+    Hint("Seelie's own rail: the letters on a curve where your thumb rests, with a seelie guide. Drag along the curve to pick a letter; a tap still opens what's under it.")
+    val rails = remember { RailStore.get(context) }
+    Choice("Rail style", RailStyle.entries.filter { it.built }.map { it.id to it.title }, rails.style.id) { v ->
+        rails.use(RailStyle.byId(v))
+    }
+    Hint("Coming as rail styles: " + RailStyle.entries.filter { !it.built }.joinToString(", ") { it.title } + ".")
 
     SectionLabel("Seelie touches")
     Hint("Little things only Seelie has, from the spirit in its icon.")
