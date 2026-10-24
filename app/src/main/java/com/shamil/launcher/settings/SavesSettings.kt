@@ -180,7 +180,7 @@ private fun SaveCard(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f).clickable(remember { MutableInteractionSource() }, null, onClick = onPreview)) {
                 Text(save.name, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.text, fontSize = 18.sp))
-                Text(save.themeName + if (hasWallpaper) " · with wallpaper" else "", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
+                Text(save.themeName + when { hasWallpaper && store.lockWallpaperFile(save).exists() -> " · home + lock wallpaper"; hasWallpaper -> " · with wallpaper"; else -> "" }, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
                 Spacer(Modifier.height(8.dp))
                 SaveButton("Apply", filled = true, onClick = onApply)
             }

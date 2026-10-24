@@ -62,8 +62,12 @@ class SavesStore private constructor(private val context: Context) {
             themeName = current.name,
         )
         persist(saves + save)
-        // The wallpaper he picked through Seelie (Android won't let us read it otherwise), else try the phone's own.
-        Thread { if (WallpaperStore.get(context).copyInto(wallpaperFile(save)) || copySystemWallpaper(save)) persist(saves) }.start()
+        // The wallpapers he picked through Seelie (Android won't let us read them otherwise), else try the phone's own.
+        Thread {
+            val wallpapers = WallpaperStore.get(context)
+            wallpapers.copyLockInto(lockWallpaperFile(save))
+            if (wallpapers.copyInto(wallpaperFile(save)) || copySystemWallpaper(save)) persist(saves)
+        }.start()
         return save
     }
 
@@ -84,8 +88,17 @@ class SavesStore private constructor(private val context: Context) {
         true
     }.getOrDefault(false)
 
-    /** Overwrites a save with the current look (keeps its name and wallpaper). */
+    /**
+     * Overwrites a save with the current look, wallpapers included (the ones he picked through Seelie; a save keeps
+     * its own pictures if there's no copy). Keeps its name.
+     */
     fun update(save: SavedLook) {
+        Thread {
+            val wallpapers = WallpaperStore.get(context)
+            val home = wallpapers.copyInto(wallpaperFile(save))
+            val lock = wallpapers.copyLockInto(lockWallpaperFile(save))
+            if (home || lock) persist(saves)
+        }.start()
         val current = LookStore.get(context).look
         persist(saves.map {
             if (it.id == save.id) it.copy(snapshot = snapshot(), accent = current.accent.toArgb(), sheet = current.sheet.toArgb(), themeName = current.name)
@@ -97,12 +110,15 @@ class SavesStore private constructor(private val context: Context) {
 
     fun delete(save: SavedLook) {
         wallpaperFile(save).delete()
+        lockWallpaperFile(save).delete()
         persist(saves.filter { it.id != save.id })
     }
 
     /** The picture kept for this save (may not exist). */
     fun wallpaperFile(save: SavedLook) = File(dir, "${save.id}.jpg")
     fun hasWallpaper(save: SavedLook) = wallpaperFile(save).exists()
+    /** The lock screen picture kept for this save (may not exist). */
+    fun lockWallpaperFile(save: SavedLook) = File(dir, "${save.id}-lock.jpg")
 
     /**
      * Keeps a copy of the picked picture for this save, shrunk to about screen size (run off the main thread).
@@ -117,6 +133,7 @@ class SavesStore private constructor(private val context: Context) {
 
     fun removeWallpaper(save: SavedLook) {
         wallpaperFile(save).delete()
+        lockWallpaperFile(save).delete()
         persist(saves)
     }
 
@@ -126,13 +143,16 @@ class SavesStore private constructor(private val context: Context) {
      */
     fun apply(save: SavedLook, withWallpaper: Boolean = true) {
         restore(save.snapshot)
-        if (withWallpaper && hasWallpaper(save)) {
+        // A save swaps the wallpapers too (his ask: like switching a whole setup with one script).
+        if (withWallpaper) {
+            val home = wallpaperFile(save).takeIf { it.exists() }
+            val lock = lockWallpaperFile(save).takeIf { it.exists() }
             runCatching {
-                wallpaperFile(save).inputStream().use {
-                    WallpaperManager.getInstance(context).setStream(it, null, true, WallpaperManager.FLAG_SYSTEM)
-                }
-                WallpaperStore.get(context).keep(wallpaperFile(save))
+                val manager = WallpaperManager.getInstance(context)
+                home?.inputStream()?.use { manager.setStream(it, null, true, WallpaperManager.FLAG_SYSTEM) }
+                lock?.inputStream()?.use { manager.setStream(it, null, true, WallpaperManager.FLAG_LOCK) }
             }
+            if (home != null || lock != null) WallpaperStore.get(context).keep(home, lock)
         }
     }
 

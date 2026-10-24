@@ -21,9 +21,10 @@ import java.io.File
 class WallpaperStore private constructor(private val context: Context) {
     private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private val file = File(File(context.filesDir, "wallpaper").apply { mkdirs() }, "current.jpg")
+    private val lockFile = File(file.parentFile, "lock.jpg")
 
     /** Goes up whenever the copy changes, so previews reload it (0 = no copy). */
-    var version by mutableIntStateOf(if (file.exists()) 1 else 0)
+    var version by mutableIntStateOf(if (file.exists() || lockFile.exists()) 1 else 0)
         private set
 
     /** Where a new wallpaper goes: "home", "lock" or "both". */
@@ -43,6 +44,9 @@ class WallpaperStore private constructor(private val context: Context) {
     /** Seelie's copy of the wallpaper, or null if he hasn't picked one through Seelie yet. Reading [version] first keeps it live. */
     fun copyFile(): File? = file.takeIf { version > 0 && it.exists() }
 
+    /** Seelie's copy of the lock screen picture (when he picked one through Seelie). */
+    fun lockCopyFile(): File? = lockFile.takeIf { version > 0 && it.exists() }
+
     /** Sets the picked picture as his wallpaper (on [target]) and keeps a copy. Slow: off the main thread. */
     fun setFromUri(uri: Uri): Boolean = runCatching {
         val bitmap = decodeForScreen(context, uri) ?: return@runCatching false
@@ -54,23 +58,28 @@ class WallpaperStore private constructor(private val context: Context) {
             else -> WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
         }
         picked.inputStream().use { WallpaperManager.getInstance(context).setStream(it, null, true, flags) }
-        // Only the home wallpaper is what the previews show; a lock-screen-only picture leaves the copy as it was.
-        if (target == "lock") picked.delete()
-        else {
-            picked.copyTo(file, overwrite = true)
-            picked.delete()
-            version++
-        }
+        // Keep a copy of each screen it went on (the previews show the home one; a save swaps both).
+        if (target != "home") picked.copyTo(lockFile, overwrite = true)
+        if (target != "lock") picked.copyTo(file, overwrite = true)
+        picked.delete()
+        version++
         true
     }.getOrDefault(false)
 
-    /** A save with its own picture was applied: that picture is the wallpaper now, so it becomes the copy. */
-    fun keep(from: File) {
-        runCatching { from.copyTo(file, overwrite = true); version++ }
+    /** A save with its own pictures was applied: those are the wallpapers now, so they become the copies. */
+    fun keep(home: File?, lock: File?) {
+        runCatching {
+            home?.takeIf { it.exists() }?.copyTo(file, overwrite = true)
+            lock?.takeIf { it.exists() }?.copyTo(lockFile, overwrite = true)
+            version++
+        }
     }
 
-    /** Copies Seelie's copy into [to] (for a new save). False if there's no copy. */
+    /** Copies Seelie's home copy into [to] (for a save). False if there's no copy. */
     fun copyInto(to: File): Boolean = runCatching { file.exists() && file.copyTo(to, overwrite = true).exists() }.getOrDefault(false)
+
+    /** Copies Seelie's lock screen copy into [to]. False if there's none. */
+    fun copyLockInto(to: File): Boolean = runCatching { lockFile.exists() && lockFile.copyTo(to, overwrite = true).exists() }.getOrDefault(false)
 
     companion object {
         const val PREFS = "wallpaper"
