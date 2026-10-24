@@ -173,6 +173,7 @@ private val SETTINGS_INDEX = listOf(
     SettingHit("Widget card style", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "card kaart glass solid outline"),
     SettingHit("Search & commands", "Seelie settings", listOf(Page.Search), R.drawable.ic_search, Hydro, "search zoeken engine zoekmachine duckduckgo google contacts contacten calculator rekenmachine commands timer torch zaklamp"),
     SettingHit("Default home app", "Seelie", listOf(Page.Seelie), R.drawable.ic_home, Geo, "home launcher default standaard startscherm niagara switch"),
+    SettingHit("Rescue screen (safe mode)", "Seelie", listOf(Page.Seelie), R.drawable.ic_settings, Geo, "rescue safe mode veilige modus crash reset herstel broken kapot"),
     SettingHit("Version", "Seelie", listOf(Page.Seelie), R.drawable.ic_settings, Geo, "version versie about over"),
 )
 
@@ -378,6 +379,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     val context = LocalContext.current
                     GroupCard(R.drawable.ic_home, look.accent, "Default home app", "Pick Seelie or another launcher") {
                         openSafely(context, DefaultHome.settingsIntent())
+                    }
+                    GroupCard(R.drawable.ic_settings, Geo, "Rescue screen", "What opens if Seelie keeps crashing: reset the look, switch home app") {
+                        com.shamil.launcher.SafeMode.open(context)
                     }
                     val version = remember {
                         @Suppress("DEPRECATION")   // the newer form needs Android 13; this one works everywhere

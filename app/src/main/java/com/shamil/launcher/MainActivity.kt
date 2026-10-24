@@ -9,6 +9,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.shamil.launcher.ui.HomeScreen
@@ -25,10 +26,16 @@ class MainActivity : ComponentActivity() {
     private var isDefault by mutableStateOf(true)
     /** His chosen theme and font; the settings screen changes them. */
     private lateinit var looks: LookStore
+    /** The rescue screen instead of the home (safe mode): after crashes, or opened by hand ([rescueByHand]). */
+    private var rescue by mutableStateOf(false)
+    private var rescueByHand by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        looks = LookStore.get(this)
+        // First of all, before anything that could crash: note crashes, and check if it keeps crashing.
+        SafeMode.install(this)
+        rescueByHand = intent?.getBooleanExtra(SafeMode.EXTRA_RESCUE, false) == true
+        rescue = rescueByHand || SafeMode.shouldRescue(this)
         // Draw under the status and navigation bars, with light icons so they read on a dark wallpaper.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
@@ -39,8 +46,14 @@ class MainActivity : ComponentActivity() {
             override fun handleOnBackPressed() {}
         })
         setContent {
-            LauncherTheme(look = animatedLook(looks.look)) {
-                HomeScreen(state = home, isDefault = isDefault)
+            if (rescue) {
+                SafeModeScreen(byHand = rescueByHand) { rescue = false; rescueByHand = false }
+            } else {
+                // Only now: in safe mode even reading his look is skipped, in case that's what breaks.
+                val store = remember { LookStore.get(this).also { looks = it } }
+                LauncherTheme(look = animatedLook(store.look)) {
+                    HomeScreen(state = home, isDefault = isDefault)
+                }
             }
         }
     }
@@ -67,7 +80,7 @@ class MainActivity : ComponentActivity() {
         // Re-check every time we come to the front, e.g. after changing the Home app in Settings.
         isDefault = DefaultHome.isDefault(this)
         // His wallpaper may have changed while he was away ("Match my wallpaper" theme).
-        looks.refreshWallpaper()
+        if (::looks.isInitialized) looks.refreshWallpaper()
     }
 
     /**
@@ -76,6 +89,11 @@ class MainActivity : ComponentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(SafeMode.EXTRA_RESCUE, false)) {
+            rescueByHand = true
+            rescue = true
+            return
+        }
         if (inFront) home.reset() else home.returnFromApp()
     }
 }
