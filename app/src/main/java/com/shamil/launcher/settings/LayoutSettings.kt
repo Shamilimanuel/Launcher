@@ -117,12 +117,11 @@ fun ColumnScope.LayoutSettingsContent(onClockFaces: () -> Unit) {
     }
 
     SectionLabel("A–Z rail")
-    Hint("Seelie's own rail: the letters on a curve where your thumb rests, with a seelie guide. Drag along the curve to pick a letter; a tap still opens what's under it.")
+    Hint("Seelie's own rails, in the order you picked them. The arc ones sit where your thumb rests: drag along the curve to pick a letter (a tap still opens what's under it).")
     val rails = remember { RailStore.get(context) }
-    Choice("Rail style", RailStyle.entries.filter { it.built }.map { it.id to it.title }, rails.style.id) { v ->
-        rails.use(RailStyle.byId(v))
+    RailStyle.entries.filter { it.built }.forEach { style ->
+        PresetRow(style.title, style.about, selected = rails.style == style) { rails.use(style) }
     }
-    Hint("Coming as rail styles: " + RailStyle.entries.filter { !it.built }.joinToString(", ") { it.title } + ".")
 
     SectionLabel("Seelie touches")
     Hint("Little things only Seelie has, from the spirit in its icon.")

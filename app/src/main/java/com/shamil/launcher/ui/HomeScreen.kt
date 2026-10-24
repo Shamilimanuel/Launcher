@@ -1,5 +1,12 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.rail.WheelRail
+import com.shamil.launcher.ui.rail.GliderRail
+import com.shamil.launcher.ui.rail.LanternRail
+import com.shamil.launcher.ui.rail.ConstellationRail
+import com.shamil.launcher.ui.rail.PetalFanRail
+import com.shamil.launcher.ui.rail.SeelieGuideRail
+import com.shamil.launcher.ui.rail.ThumbArcLayer
 import com.shamil.launcher.ui.rail.rememberArcRailState
 import com.shamil.launcher.ui.rail.arcRailInput
 import com.shamil.launcher.ui.rail.RailStyle
@@ -192,6 +199,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         }
     }
     val lettersWithApps = remember(listedApps) { listedApps.map { it.letter }.toSet() }
+    // Each letter's apps, for the rail styles that show them by the thumb (Petal fan, Constellation).
+    val appsByLetter = remember(listedApps) { listedApps.groupBy { it.letter } }
     // "Suggested" in Edit favourites: the apps he opened most in the last 2 weeks that aren't favourites yet;
     // until Seelie has counted some opens, his newest apps.
     val suggestions = remember(listedApps, favourites.packages, state.editingFavourites) {
@@ -280,7 +289,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 }
             }
             // Guide on the arc: drags along the curve at the bottom right (taps still reach what's under them).
-            .arcRailInput(arcRail, enabled = railStyle != RailStyle.NIAGARA && !state.searching && !state.editingFavourites && !vaultOpen)
+            .arcRailInput(arcRail, enabled = railStyle.onArc && !state.searching && !state.editingFavourites && !vaultOpen)
     ) {
         val screenH = maxHeight
 
@@ -465,27 +474,44 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             LockGate(label)
         }
 
-        if (!state.searching && !state.editingFavourites && !vaultOpen && railStyle != RailStyle.NIAGARA) {
-            ArcRailLayer(arcRail, lettersWithApps)
-        }
-        if (!state.searching && !state.editingFavourites && !vaultOpen && railStyle == RailStyle.NIAGARA) {
-            LetterRail(
-                present = lettersWithApps,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = screenH * 0.27f)
-                    .height(screenH * 0.64f)
-                    // The touch strip runs to the screen edge; letters sit 32dp in, like his Niagara.
-                    .width(46.dp),
-                onSlide = { slideY = it },
-                onRelease = { slid ->
-                    // Let go on a lit-up app after sliding off the letters: open it (Niagara can't do this).
-                    if (slid) slideTarget?.let { Apps.launch(context, it) }
-                    slideY = null
-                    slideTarget = null
-                },
-                onHoldDot = { vaultOpen = true },
-            ) { picked -> onListLetter(if (picked == STAR) null else picked) }
+        if (!state.searching && !state.editingFavourites && !vaultOpen) {
+            // The arc styles draw over the whole home (their touch lives on the home's root, see arcRailInput).
+            when (railStyle) {
+                RailStyle.ARC_GUIDE -> ArcRailLayer(arcRail, lettersWithApps)
+                RailStyle.THUMB_ARC -> ThumbArcLayer(arcRail, lettersWithApps)
+                else -> {}
+            }
+            // The edge styles: all in the same strip on the right edge, with the same callbacks as the Niagara wave.
+            val railBox = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = screenH * 0.27f)
+                .height(screenH * 0.64f)
+                // The touch strip runs to the screen edge; letters sit 32dp in, like his Niagara.
+                .width(46.dp)
+            val onRailSlide: (Float?) -> Unit = { slideY = it }
+            val onRailRelease: (Boolean) -> Unit = { slid ->
+                // Let go on a lit-up app after sliding off the letters: open it (Niagara can't do this).
+                if (slid) slideTarget?.let { Apps.launch(context, it) }
+                slideY = null
+                slideTarget = null
+            }
+            val onRailHold = { vaultOpen = true }
+            val onRailPick: (String) -> Unit = { picked -> onListLetter(if (picked == STAR) null else picked) }
+            // Fan and constellation show the apps of a letter right by the thumb.
+            val appsFor: (String) -> List<AppEntry> = { item ->
+                when (item) { STAR -> favouriteApps; DOT -> emptyList(); else -> appsByLetter[item].orEmpty() }
+            }
+            val onRailOpen: (AppEntry) -> Unit = { app -> Apps.launch(context, app) }
+            when (railStyle) {
+                RailStyle.NIAGARA -> LetterRail(lettersWithApps, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                RailStyle.GUIDE -> SeelieGuideRail(lettersWithApps, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                RailStyle.FAN -> PetalFanRail(lettersWithApps, appsFor, onRailOpen, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                RailStyle.CONSTELLATION -> ConstellationRail(lettersWithApps, appsFor, onRailOpen, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                RailStyle.LANTERN -> LanternRail(lettersWithApps, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                RailStyle.GLIDER -> GliderRail(lettersWithApps, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                RailStyle.WHEEL -> WheelRail(lettersWithApps, railBox, onRailSlide, onRailRelease, onRailHold, onRailPick)
+                else -> {}
+            }
         }
     }
 

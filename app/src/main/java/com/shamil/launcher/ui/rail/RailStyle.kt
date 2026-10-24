@@ -14,14 +14,17 @@ import androidx.core.content.edit
  */
 enum class RailStyle(val id: String, val title: String, val about: String, val built: Boolean) {
     ARC_GUIDE("arcguide", "Guide on the arc", "Letters on a curve where your thumb rests; a seelie guide rides along with its light trail.", true),
-    GUIDE("guide", "Seelie guide", "The rail on the edge; a seelie rides under your thumb and lights the letters up.", false),
-    THUMB_ARC("arc", "Thumb arc", "Letters on a curve at the bottom right; the ones near your thumb bulge out.", false),
-    FAN("fan", "Petal fan", "Touch a letter and its apps bloom beside your thumb; slide onto one to open it.", false),
-    CONSTELLATION("constellation", "Constellation", "The letters are stars; sliding draws constellation lines.", false),
-    LANTERN("lantern", "Lanterns", "Letters hang like paper lanterns; the one under your thumb glows and its neighbours swing.", false),
-    GLIDER("glider", "Wind glider", "Like gliding: the letter lifts and its neighbours flow out on a wind of light.", false),
-    WHEEL("wheel", "Element wheel", "Hold the edge and a dial of letters opens around your thumb; turn to choose.", false),
+    GUIDE("guide", "Seelie guide", "The rail on the edge; a seelie rides under your thumb and lights the letters up.", true),
+    THUMB_ARC("arc", "Thumb arc", "Letters on a curve at the bottom right; the ones near your thumb bulge out.", true),
+    FAN("fan", "Petal fan", "Touch a letter and its apps bloom beside your thumb; slide onto one to open it.", true),
+    CONSTELLATION("constellation", "Constellation", "The letters are stars; sliding draws constellation lines.", true),
+    LANTERN("lantern", "Lanterns", "Letters hang like paper lanterns; the one under your thumb glows and its neighbours swing.", true),
+    GLIDER("glider", "Wind glider", "Like gliding: the letter lifts and its neighbours flow out on a wind of light.", true),
+    WHEEL("wheel", "Element wheel", "Hold the edge and a dial of letters opens around your thumb; turn to choose.", true),
     NIAGARA("niagara", "Today (Niagara-style)", "The wave you had before: letters bend out towards your thumb.", true);
+
+    /** The styles drawn on the thumb arc (their touch is the home's arcRailInput). */
+    val onArc: Boolean get() = this == ARC_GUIDE || this == THUMB_ARC
 
     companion object {
         fun byId(id: String?): RailStyle = entries.firstOrNull { it.id == id && it.built } ?: ARC_GUIDE
