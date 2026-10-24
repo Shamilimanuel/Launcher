@@ -1,5 +1,6 @@
 package com.shamil.launcher.ui.theme
 
+import com.shamil.launcher.ui.home.HomeLayoutStore
 import com.shamil.launcher.ui.livebg.LiveBgStore
 import android.app.WallpaperManager
 import android.content.Context
@@ -150,6 +151,7 @@ class SavesStore private constructor(private val context: Context) {
         MusicPrefs.get(context).reload()
         TogglePrefs.get(context).reload()
         LiveBgStore.get(context).reload()
+        HomeLayoutStore.get(context).reload()
     }
 
     /** Every look settings file, entry by entry, with its type so it can be put back exactly. */
@@ -219,7 +221,7 @@ class SavesStore private constructor(private val context: Context) {
     companion object {
         private const val KEY = "list"
         /** The settings files a save captures (only looks, never his apps, notes, vault or widgets). */
-        private val FILES = listOf("look", "home_style", "clock", "stats_card", "music_card", "quick_toggles", LiveBgStore.PREFS)
+        private val FILES = listOf("look", "home_style", "clock", "stats_card", "music_card", "quick_toggles", LiveBgStore.PREFS, HomeLayoutStore.PREFS)
         @Volatile private var instance: SavesStore? = null
 
         fun get(context: Context): SavesStore =

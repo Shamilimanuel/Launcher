@@ -1,5 +1,6 @@
 package com.shamil.launcher.ui.notify
 
+import com.shamil.launcher.ui.LocalAppIcons
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,7 +83,7 @@ private fun rememberNow(): State<Long> = produceState(System.currentTimeMillis()
 
 /** Where a favourite's name starts (icon start + icon + gap, as in AppRow), so the line sits right under the name. */
 @Composable
-internal fun nameStart(): Dp = ROW_START + 44.dp * LocalLauncherLook.current.iconScale + 20.dp
+internal fun nameStart(): Dp = if (!LocalAppIcons.current) ROW_START else ROW_START + 44.dp * LocalLauncherLook.current.iconScale + 20.dp
 
 /** Draws [content] [by] higher and takes that much less room, so the line tucks up under the row's name. */
 private fun Modifier.pullUp(by: Dp) = layout { measurable, constraints ->

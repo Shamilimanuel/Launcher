@@ -67,6 +67,9 @@ import com.shamil.launcher.ui.theme.LocalLauncherLook
 /** Sizes measured from Niagara's own layout on his phone (adb uiautomator, 23 Oct; see reference/setup-notes.md). */
 val ROW_START = 46.dp
 
+/** False = a plain text list, no app icons (Look → Layout → Favourites icons: "Text only"). */
+val LocalAppIcons = androidx.compose.runtime.compositionLocalOf { true }
+
 /** Opens in 14 days before an app moves to the top of its letter. */
 private const val MIN_OPENS_TO_RISE = 3
 
@@ -298,8 +301,10 @@ fun AppRow(
             leading()
             Spacer(Modifier.width(10.dp))
         }
-        Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(44.dp * LocalLauncherLook.current.iconScale))
-        Spacer(Modifier.width(20.dp))
+        if (LocalAppIcons.current) {
+            Image(bitmap = app.icon, contentDescription = null, modifier = Modifier.size(44.dp * LocalLauncherLook.current.iconScale))
+            Spacer(Modifier.width(20.dp))
+        }
         Text(
             app.label,
             style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp, shadow = look.shadow),

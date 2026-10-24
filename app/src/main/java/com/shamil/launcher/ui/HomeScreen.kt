@@ -1,5 +1,17 @@
 package com.shamil.launcher.ui
 
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import com.shamil.launcher.ui.home.trailBead
+import com.shamil.launcher.ui.home.lightTrail
+import com.shamil.launcher.ui.home.WallpaperFade
+import com.shamil.launcher.ui.home.currentHomeLayout
+import com.shamil.launcher.ui.home.BLOCK_FAVS
+import com.shamil.launcher.ui.home.BLOCK_MUSIC
+import com.shamil.launcher.ui.home.BLOCK_WIDGETS
+import com.shamil.launcher.ui.home.BLOCK_TOP
 import com.shamil.launcher.ui.livebg.rememberLiveBgController
 import com.shamil.launcher.ui.livebg.LivingBackground
 import android.content.BroadcastReceiver
@@ -187,6 +199,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The weather/stats line and its card. The card closes when you tap away, press Back or open the list.
     val glance = rememberGlanceState()
+    // The layout editor's choices (Look → Layout), and where the clock is (the light trail starts there).
+    val layout = currentHomeLayout()
+    var clockMid by remember { mutableFloatStateOf(-1f) }
+    val trailColour = LocalLauncherLook.current.accent
     // The living background (Look → Living background): drawn behind everything, fed with the real weather.
     val liveBg = rememberLiveBgController()
     // His home style: how the clock, date, glance line and widget card look together (one bundle + tweaks).
@@ -240,6 +256,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     ) {
         val screenH = maxHeight
 
+        // Background fade (Look → Layout): the wallpaper only at the top, melting into a colour below.
+        if (layout.fade) WallpaperFade(layout)
+
         // First child = drawn first = behind the clock, apps and rail. Paused under the vault and Edit favourites.
         LivingBackground(
             Modifier.fillMaxSize(),
@@ -275,51 +294,70 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                         .verticalScroll(favouritesScroll)
                         // Room at the bottom for the navigation buttons, so the last favourite never hides behind them.
                         .padding(bottom = 32.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        // Seelie touch "Light trail" (Look → Layout): a thin gold trail from the clock down past the favourites.
+                        .drawBehind { if (layout.trail && layout.favs && clockMid >= 0f) lightTrail(clockMid, trailColour) }
                 ) {
                     // The clock, date and glance line scroll away with the favourites too, like Niagara (his 23 Oct ask).
-                    Spacer(Modifier.height(screenH * 0.105f))
-                    // The clock area, the full width of the screen: holding the empty space right of the clock
-                    // opens the "Seelie widget" sheet, like Niagara's.
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .pointerInput(Unit) {
-                                detectTapGestures(onLongPress = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    widgetSheet = true
-                                })
+                    // How far down the clock starts is his (Look → Layout; his mockup pick: lower, in thumb reach).
+                    Spacer(Modifier.height(screenH * layout.clockTop))
+                    // The blocks in his order (Look → Layout): the top (clock, date, glance), widgets, music, favourites.
+                    layout.order.forEach { block ->
+                        when (block) {
+                            BLOCK_TOP -> {
+                                // The clock area, the full width of the screen: holding the empty space right of the clock
+                                // opens the "Seelie widget" sheet, like Niagara's.
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        // Where the clock sits, for the light trail that starts there.
+                                        .onGloballyPositioned { clockMid = it.positionInParent().y + it.size.height * 0.28f }
+                                        .pointerInput(Unit) {
+                                            detectTapGestures(onLongPress = {
+                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                widgetSheet = true
+                                            })
+                                        }
+                                ) {
+                                    // Clock, date and glance line in his home style (Look → Home style) and layout.
+                                    ClockAndDate(glance, onLongPress = { widgetSheet = true })
+                                }
+                                if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
+                                Spacer(Modifier.height(12.dp))
+                                // The stats card sits under the top and scrolls with it, so apps can't slide up behind it.
+                                GlanceCard(glance, Modifier.padding(start = 48.dp, end = 56.dp))
                             }
-                    ) {
-                        // Clock, date and glance line in his home style (Look → Home style), on one left edge.
-                        ClockAndDate(glance, onLongPress = { widgetSheet = true })
-                    }
-                    if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
-                    Spacer(Modifier.height(12.dp))
-                  Column(Modifier.padding(end = 56.dp)) {
-                    // The stats card sits at the top of the favourites and scrolls with them,
-                    // so apps can't slide up behind it (his 23 Oct bug).
-                    GlanceCard(glance, Modifier.padding(start = 48.dp))
-                    // The widget stack: swipe sideways for the next widget. It sits at the top of the favourites
-                    // and scrolls away with them, so it never takes space for good. (Pick widgets in Seelie settings.)
-                    // Same left edge as the clock, and the bundle's space above it.
-                    // Widgets and the music card in his "Widgets" text colour (Look → Fonts → Colour these).
-                    CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("widgets")) {
-                        WidgetStack(Modifier.padding(start = homeStyle.edge.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
-                        // The music card under the widgets, on the same left edge (Home screen → Music card).
-                        MusicCard(Modifier.padding(start = homeStyle.edge.dp, bottom = 8.dp))
-                    }
-                    // The quick toggles row sits between his favourites, after as many as he chose (Home screen → Quick toggles).
-                    val toggleSlot = remember { TogglePrefs.get(context) }.rowSlot(favouriteApps.size)
-                    // His favourites in his "App names" text colour.
-                    CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("apps")) {
-                        favouriteApps.forEachIndexed { i, app ->
-                            if (i == toggleSlot) QuickTogglesRow()
-                            // A website shortcut doesn't show its browser's notifications.
-                            AppItem(app, showNotifications = app.shortcutId == null) { openMenu(app) }
+                            // The widget stack: swipe sideways for the next widget; it scrolls away with the rest.
+                            // Widgets and the music card in his "Widgets" text colour (Look → Fonts → Colour these).
+                            BLOCK_WIDGETS -> if (layout.widgets) {
+                                CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("widgets")) {
+                                    WidgetStack(Modifier.padding(start = homeStyle.edge.dp, end = 56.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
+                                }
+                            }
+                            // The music card (Home screen → Music card; it hides itself when it's off).
+                            BLOCK_MUSIC -> CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("widgets")) {
+                                MusicCard(Modifier.padding(start = homeStyle.edge.dp, end = 56.dp, bottom = 8.dp))
+                            }
+                            BLOCK_FAVS -> if (layout.favs) Column(Modifier.padding(end = 56.dp)) {
+                                // The quick toggles row sits between his favourites, after as many as he chose (Home screen → Quick toggles).
+                                val toggleSlot = remember { TogglePrefs.get(context) }.rowSlot(favouriteApps.size)
+                                // His favourites in his "App names" text colour, and his icon style (Layout: normal, small, text only).
+                                val appsLook = LocalLauncherLook.current.forPart("apps").let {
+                                    if (layout.icons == "small") it.copy(iconScale = it.iconScale * 0.7f) else it
+                                }
+                                CompositionLocalProvider(LocalLauncherLook provides appsLook, LocalAppIcons provides (layout.icons != "text")) {
+                                    favouriteApps.forEachIndexed { i, app ->
+                                        if (i == toggleSlot) QuickTogglesRow()
+                                        // The light trail's bead on each favourite (Seelie touch).
+                                        Box(if (layout.trail) Modifier.drawBehind { trailBead(i) } else Modifier) {
+                                            // A website shortcut doesn't show its browser's notifications.
+                                            AppItem(app, showNotifications = app.shortcutId == null) { openMenu(app) }
+                                        }
+                                    }
+                                    if (toggleSlot == favouriteApps.size) QuickTogglesRow()
+                                }
+                            }
                         }
-                        if (toggleSlot == favouriteApps.size) QuickTogglesRow()
                     }
-                  }
                 }
             }
         }

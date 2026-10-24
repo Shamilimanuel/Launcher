@@ -126,7 +126,7 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, LiveBg, Saves, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
+private enum class Page { Top, Look, Layout, LiveBg, Saves, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -154,6 +154,7 @@ private class SettingHit(
 private val SETTINGS_INDEX = listOf(
     SettingHit("Your themes (saves)", "Look · Themes", listOf(Page.Look, Page.Themes), R.drawable.ic_star, Geo, "save saves opslaan saved looks profile profiel preset wallpaper achtergrond"),
     SettingHit("Home style (bundles)", "Look", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_home_filled, Electro, "home style bundle bundles glass floating gold minimal spirit transparent see-through doorzichtig card kaart spacing edge"),
+    SettingHit("Layout", "Look", listOf(Page.Look, Page.Layout), R.drawable.ic_drag_indicator, Geo, "layout indeling blocks blokken move verplaatsen align uitlijnen centre midden fade vervagen trail spoor sparkles sterretjes order volgorde hide verbergen big day clock position klok positie"),
     SettingHit("Living background", "Look", listOf(Page.Look, Page.LiveBg), R.drawable.ic_wallpaper, Dendro, "living background achtergrond live animated bewegend petals blossom sakura bloesem stars sterren aurora rain regen snow sneeuw storm onweer lanterns lantaarns fireflies vuurvliegjes butterflies vlinders clouds wolken mist tilt weather weer"),
     SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
     SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
@@ -287,6 +288,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     val homeStyle = HomeStyleStore.get(LocalContext.current)
                     GroupCard(R.drawable.ic_star, Geo, "Your themes", SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Save your look as a theme, with its own wallpaper" else "$it saved · plus the built-in themes" }) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_home_filled, Electro, "Home style", homeStyle.bundle.title + if (homeStyle.isCustom) " · custom" else "") { push(Page.HomeStyle) }
+                    GroupCard(R.drawable.ic_drag_indicator, Geo, "Layout", "Move, line up and switch off parts · fade · Seelie touches") { push(Page.Layout) }
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
                     GroupCard(R.drawable.ic_apps, Cryo, "Icons", "Icon pack and icon size") { push(Page.Icons) }
@@ -349,6 +351,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     StatsSettingsContent()
                 }
                 // The real card stays pinned at the top while he changes things below.
+                Page.Layout -> PageFrame("Look", "Layout", onBack = ::pop, pinned = { HomePreview() }) {
+                    LayoutSettingsContent(onClockFaces = { push(Page.Clock) })
+                }
                 Page.LiveBg -> PageFrame("Look", "Living background", onBack = ::pop, pinned = { LiveBgPreview() }) {
                     LiveBgSettingsContent(showPreview = false)
                 }

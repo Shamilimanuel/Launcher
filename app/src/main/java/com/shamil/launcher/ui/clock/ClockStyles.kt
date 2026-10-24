@@ -104,7 +104,8 @@ enum class ClockStyle(val id: String, val label: String, val blurb: String) {
     Serif("serif", "Serif", "Elegant italic"),
     Words("words", "In words", "“ten past eight”"),
     Neon("neon", "Neon tube", "Glowing, blinking colon"),
-    SeelieColon("seelie", "Seelie colon", "A spirit sits in the colon");
+    SeelieColon("seelie", "Seelie colon", "A spirit sits in the colon"),
+    BigDay("bigday", "Big day", "The weekday is the clock");
 
     companion object {
         /** The style saved under [id]; unknown or nothing saved = Classic (today's clock). */
@@ -355,6 +356,28 @@ fun ClockFace(style: ClockStyle, time: LocalDateTime, is24h: Boolean, modifier: 
             fontFamily = look.font, fontWeight = FontWeight.Normal, color = Color.White, fontSize = size(1.12f),
             shadow = Shadow(look.accent, blurRadius = px(10f))),
             backShadow = Shadow(look.accent.copy(alpha = 0.75f), blurRadius = px(28f)))
+
+        // His pick (24 Oct): the weekday huge and thin, the time small on its left, the date on its right (month in gold).
+        ClockStyle.BigDay -> {
+            val day = time.format(DateTimeFormatter.ofPattern("EEE", Locale.getDefault())).replace(".", "").uppercase()
+            val month = time.format(DateTimeFormatter.ofPattern("MMM", Locale.getDefault())).replace(".", "").uppercase()
+            val gap = with(density) { px(10f).toDp() }
+            Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+                ClockText(hhmm, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.text,
+                    fontSize = size(0.34f), shadow = look.shadow))
+                Spacer(Modifier.width(gap))
+                ClockText(day, style = TextStyle(fontFamily = SystemLight, color = look.text, fontSize = size(1.6f),
+                    letterSpacing = 0.01.em, lineHeight = 0.9.em, lineHeightStyle = TightLines,
+                    shadow = Shadow(look.accent.copy(alpha = 0.3f), blurRadius = px(22f))))
+                Spacer(Modifier.width(gap))
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    ClockText(time.dayOfMonth.toString(), style = TextStyle(fontFamily = SystemLight, color = look.text,
+                        fontSize = size(0.5f), lineHeight = 1.em, lineHeightStyle = TightLines, shadow = look.shadow))
+                    ClockText(month, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent,
+                        fontSize = size(0.26f), letterSpacing = 0.14.em, shadow = look.shadow))
+                }
+            }
+        }
 
         ClockStyle.SeelieColon -> {
             val base = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Normal, color = look.text, fontSize = size(1.1f), shadow = look.shadow)

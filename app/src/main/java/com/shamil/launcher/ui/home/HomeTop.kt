@@ -1,5 +1,9 @@
 package com.shamil.launcher.ui.home
 
+import com.shamil.launcher.ui.clock.ClockStyle
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.foundation.layout.fillMaxWidth
 import android.text.format.DateFormat
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -89,41 +93,101 @@ fun HomeTop(
 ) {
     val context = LocalContext.current
     val hs = currentHomeStyle()
+    // The layout editor (Look → Layout): which parts show, where they sit, and the clock's size.
+    val lay = currentHomeLayout()
     val clocks = remember { ClockStore.get(context) }
+    val face = LocalClockStyleOverride.current ?: clocks.clockStyle
     val is24h = DateFormat.is24HourFormat(context)
+    // Anything centred or on the right: the parts share the whole width (the same edge on both sides).
+    val spread = listOf(lay.alignClock, lay.alignDate, lay.alignGlance).any { it != "left" }
+    // The Big day face already shows the date, so the date line steps aside.
+    val showDate = lay.date && face != ClockStyle.BigDay
     Box(modifier) {
-        Column(Modifier.padding(start = hs.edge.dp)) {
-            // Optical alignment: big digits carry extra empty space on their left ("side bearing"), so the clock is
-            // nudged left by ~7% of its size to line up with the date by eye (23 Oct: "the clock needs to be a bit more left").
+        Column(if (spread) Modifier.fillMaxWidth().padding(horizontal = hs.edge.dp) else Modifier.padding(start = hs.edge.dp)) {
             val base = LocalLauncherLook.current
-            CompositionLocalProvider(LocalLauncherLook provides base.forPart("clock")) {
-                ClockFace(LocalClockStyleOverride.current ?: clocks.clockStyle, time, is24h, clockModifier.offset(x = -(hs.clockSize * 0.07f).dp))
+            if (lay.clock) {
+                Box(Modifier.align(alignOf(lay.alignClock)).sparkles(lay.sparkles)) {
+                    // Optical alignment: big digits carry extra empty space on their left ("side bearing"), so a
+                    // left-aligned clock is nudged left by ~7% of its size to line up with the date by eye (23 Oct).
+                    val nudge = if (lay.alignClock == "left") -(hs.clockSize * 0.07f * lay.clockScale).dp else 0.dp
+                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("clock")) {
+                        ClockFace(face, time, is24h, clockModifier.offset(x = nudge), scale = lay.clockScale)
+                    }
+                }
+                Spacer(Modifier.height(hs.gap1.dp))
             }
-            Spacer(Modifier.height(hs.gap1.dp))
             if (hs.inline) {
                 // Date and glance side by side; a small dot between them unless one of them is a pill.
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("date")) { BundleDate(time, dateModifier) }
-                    val pills = hs.dateStyle == "pill" || hs.glanceStyle == "pill"
-                    if (!pills) {
-                        Spacer(Modifier.width(hs.gap2.dp / 2))
-                        Box(Modifier.size(3.dp).background(LocalLauncherLook.current.text.copy(alpha = 0.55f), CircleShape))
+                if (showDate || lay.glance) Row(Modifier.align(alignOf(lay.alignDate)), verticalAlignment = Alignment.CenterVertically) {
+                    if (showDate) CompositionLocalProvider(LocalLauncherLook provides base.forPart("date")) { BundleDate(time, dateModifier) }
+                    if (showDate && lay.glance) {
+                        val pills = hs.dateStyle == "pill" || hs.glanceStyle == "pill"
+                        if (!pills) {
+                            Spacer(Modifier.width(hs.gap2.dp / 2))
+                            Box(Modifier.size(3.dp).background(LocalLauncherLook.current.text.copy(alpha = 0.55f), CircleShape))
+                        }
+                        Spacer(Modifier.width(if (pills) hs.gap2.dp else hs.gap2.dp / 2))
                     }
-                    Spacer(Modifier.width(if (pills) hs.gap2.dp else hs.gap2.dp / 2))
-                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { Glance(glance) }
+                    if (lay.glance) CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { Glance(glance) }
                 }
                 // His next event today (tap = agenda), under the line.
-                CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { EventLine(Modifier.padding(top = (hs.gap2 / 2).dp)) }
+                if (lay.glance) CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) {
+                    EventLine(Modifier.align(alignOf(lay.alignGlance)).padding(top = (hs.gap2 / 2).dp))
+                }
             } else {
-                CompositionLocalProvider(LocalLauncherLook provides base.forPart("date")) { BundleDate(time, dateModifier) }
-                Spacer(Modifier.height(hs.gap2.dp))
-                CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { Glance(glance) }
-                CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) { EventLine(Modifier.padding(top = (hs.gap2 / 2).dp)) }
+                if (showDate) {
+                    CompositionLocalProvider(LocalLauncherLook provides base.forPart("date")) {
+                        BundleDate(time, dateModifier.then(Modifier.align(alignOf(lay.alignDate))))
+                    }
+                    Spacer(Modifier.height(hs.gap2.dp))
+                }
+                if (lay.glance) CompositionLocalProvider(LocalLauncherLook provides base.forPart("line")) {
+                    Glance(glance, Modifier.align(alignOf(lay.alignGlance)))
+                    EventLine(Modifier.align(alignOf(lay.alignGlance)).padding(top = (hs.gap2 / 2).dp))
+                }
             }
         }
         if (hs.spirit) Spirit(Modifier.offset(x = hs.edge.dp + 196.dp, y = 30.dp))
     }
 }
+
+/**
+ * Seelie touch "Sparkles" (his pick from the layout mockup): three small four-point stars twinkling around the clock.
+ * Drawn over the clock in the draw phase only, so the clock itself never redraws for them.
+ */
+@Composable
+private fun Modifier.sparkles(on: Boolean): Modifier {
+    if (!on) return this
+    val t by rememberInfiniteTransition(label = "sparkles")
+        .animateFloat(0f, 1f, infiniteRepeatable(tween(3_400, easing = LinearEasing)), label = "twinkle")
+    val star = remember {
+        // A four-point star, 12 units across, centred on 0,0 (the mockup's sparkle shape).
+        androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, -6f); quadraticTo(0.7f, -0.7f, 6f, 0f); quadraticTo(0.7f, 0.7f, 0f, 6f)
+            quadraticTo(-0.7f, 0.7f, -6f, 0f); quadraticTo(-0.7f, -0.7f, 0f, -6f); close()
+        }
+    }
+    return drawWithContent {
+        drawContent()
+        // (x, y, size, phase): one off the clock's top-right, one above it, one low on the left.
+        val spots = listOf(
+            floatArrayOf(size.width + 14.dp.toPx(), 2.dp.toPx(), 1.2f, 0f),
+            floatArrayOf(size.width * 0.62f, -12.dp.toPx(), 0.75f, 0.33f),
+            floatArrayOf(-10.dp.toPx(), size.height * 0.72f, 0.6f, 0.66f),
+        )
+        for (s in spots) {
+            val pulse = 0.5f + 0.5f * kotlin.math.sin(2 * Math.PI * (t + s[3])).toFloat()
+            val k = s[2] * (0.45f + 0.55f * pulse) * 1.dp.toPx()
+            drawCircle(Brush.radialGradient(listOf(SPARK.copy(alpha = 0.45f * pulse), Color.Transparent), center = Offset(s[0], s[1]), radius = 10f * k),
+                radius = 10f * k, center = Offset(s[0], s[1]))
+            withTransform({ translate(s[0], s[1]); scale(k, k, Offset.Zero) }) {
+                drawPath(star, SPARK, alpha = 0.55f + 0.45f * pulse)
+            }
+        }
+    }
+}
+
+private val SPARK = Color(0xFFFFF6DC)
 
 /** The bundle's clock (what "Classic" in Clock & date now means). [scale] shrinks it for previews. */
 @Composable
