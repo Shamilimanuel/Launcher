@@ -340,7 +340,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                 Page.Widgets -> PageFrame("Home screen", "Widget stack", onBack = ::pop) {
                     WidgetStackSettingsContent(onAddFromApp = { push(Page.WidgetPicker) })
                 }
-                Page.WidgetPicker -> PageFrame("Widget stack", "Add from an app", onBack = ::pop) {
+                Page.WidgetPicker -> PageFrame("Widget stack", "Pick a widget", onBack = ::pop) {
                     // After adding, back to the stack page, where the new widget sits at the end.
                     AppWidgetPickerContent(onAdded = ::pop)
                 }

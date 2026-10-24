@@ -1,5 +1,21 @@
 package com.shamil.launcher.ui.widgets
 
+import com.shamil.launcher.apps.LaunchStats
+import com.shamil.launcher.apps.Favourites
+import com.shamil.launcher.R
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedVisibility
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -45,7 +61,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import com.shamil.launcher.settings.Hint
-import com.shamil.launcher.settings.SectionLabel
 import com.shamil.launcher.settings.pressFeel
 import com.shamil.launcher.settings.staggerIn
 import com.shamil.launcher.ui.theme.LocalLauncherLook
@@ -61,13 +76,20 @@ interface WidgetSetupResults {
     val widgetSetupRequestCode: Int
 }
 
-/** One widget in the picker: Android's info about it, its name, its app, a preview picture and its size in grid cells. */
-private class PickerItem(val info: AppWidgetProviderInfo, val name: String, val app: String, val preview: ImageBitmap?, val cells: String)
+/** One app that offers widgets: its name, icon and every widget it has (previews load when he opens it). */
+private class PickerApp(val pkg: String, val name: String, val icon: ImageBitmap?, val widgets: List<AppWidgetProviderInfo>) {
+    val letter: String = name.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' }?.toString() ?: "#"
+}
+
+/** One widget card: its preview picture, name, description and size in grid cells. */
+private class PickerItem(val info: AppWidgetProviderInfo, val name: String, val about: String?, val preview: ImageBitmap?, val cells: String)
 
 /**
- * Seelie settings → Home screen → Widget stack → Add from an app: every widget his apps offer, grouped by app,
- * with a preview. Tap one: Android asks "Allow Seelie to create widgets?" (only the first time per app),
- * then the widget's own setup opens if it has one, then it lands at the end of his stack and [onAdded] runs.
+ * Seelie settings → Home screen → Widget stack → Add from an app, laid out like Niagara's "Select a widget"
+ * (his screenshots, 24 Oct): a search box, Suggestions (apps he uses), then every app A–Z as one row with
+ * "N widgets"; tap an app and its widgets open under it as big preview cards. Tap a card: Android asks
+ * "Allow Seelie to create widgets?" (only the first time per app), then the widget's own setup if it has one,
+ * then it lands at the end of his stack and [onAdded] runs.
  */
 @Composable
 fun ColumnScope.AppWidgetPickerContent(onAdded: () -> Unit) {
@@ -76,78 +98,213 @@ fun ColumnScope.AppWidgetPickerContent(onAdded: () -> Unit) {
     val store = remember { WidgetStore.get(context) }
     val density = context.resources.displayMetrics.density
 
-    // Reading every app's widget list and preview pictures takes a moment, so off the main thread.
-    val items by produceState<List<PickerItem>?>(null) {
+    // The apps and how many widgets each has. Quick: no preview pictures yet (those load when an app is opened).
+    val apps by produceState<List<PickerApp>?>(null) {
         value = withContext(Dispatchers.Default) {
             val pm = context.packageManager
-            SeelieWidgetHost.providers(context).map { info ->
-                val app = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString() }
-                    .getOrDefault(info.provider.packageName)
-                val preview = runCatching {
-                    (info.loadPreviewImage(context, 0) ?: info.loadIcon(context, 0))?.let { d ->
-                        // Keep pictures small: about 300 px wide is plenty for a card.
-                        val w = max(1, d.intrinsicWidth).coerceAtMost(300)
-                        val h = (w.toFloat() * max(1, d.intrinsicHeight) / max(1, d.intrinsicWidth)).roundToInt().coerceIn(1, 400)
-                        d.toBitmap(w, h).asImageBitmap()
-                    }
-                }.getOrNull()
-                PickerItem(info, info.loadLabel(pm), app, preview, cellsOf(info, density))
-            }.sortedWith(compareBy({ it.app.lowercase() }, { it.name.lowercase() }))
+            SeelieWidgetHost.providers(context).groupBy { it.provider.packageName }.map { (pkg, widgets) ->
+                val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull()
+                PickerApp(
+                    pkg = pkg,
+                    name = info?.let { pm.getApplicationLabel(it).toString() } ?: pkg,
+                    icon = runCatching { pm.getApplicationIcon(pkg).toBitmap(96, 96).asImageBitmap() }.getOrNull(),
+                    widgets = widgets,
+                )
+            }.sortedBy { it.name.lowercase() }
         }
     }
+    // Suggestions: apps with widgets that are in his favourites or that he opens most (like Niagara's).
+    val suggested = remember(apps) {
+        val list = apps ?: return@remember emptyList()
+        val favs = Favourites(context).packages
+        val used = LaunchStats.get(context).mostOpened().map { it.first }
+        (favs + used).distinct().mapNotNull { pkg -> list.firstOrNull { it.pkg == pkg } }.take(7)
+    }
+    var query by remember { mutableStateOf("") }
+    var open by remember { mutableStateOf<String?>(null) }   // the app whose widgets are showing
 
     // Connect the chosen widget (permission + its own setup), then put it at the end of his stack.
     val connect = rememberWidgetConnector { id, info ->
         store.addApp(id, WidgetSize.forMinHeight((info.minHeight / density).roundToInt()))
         onAdded()
     }
-    fun add(info: AppWidgetProviderInfo) = connect(info)
 
-    Hint("Real widgets from your apps. The first time, Android asks if Seelie may show them; some widgets then ask for their own setup.")
-    val list = items
+    Text("Handy things from your apps, right on your home, without opening them.",
+        modifier = Modifier.staggerIn().padding(top = 6.dp, bottom = 14.dp),
+        style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 15.sp, lineHeight = 21.sp))
+    PickerSearch(query) { query = it; open = null }
+
+    val list = apps
     when {
         list == null -> Hint("Looking for widgets…")
         list.isEmpty() -> Hint("None of your apps offer widgets.")
-        else -> list.groupBy { it.app }.forEach { (app, widgets) ->
-            SectionLabel(app)
-            widgets.forEach { item -> PickerCard(item) { add(item.info) } }
+        query.isNotBlank() -> {
+            // Searching: apps whose name matches, or that have a widget whose name matches.
+            val q = query.trim().lowercase()
+            val pm = context.packageManager
+            val hits = list.filter { app ->
+                app.name.lowercase().contains(q) || app.widgets.any { runCatching { it.loadLabel(pm) }.getOrDefault("").lowercase().contains(q) }
+            }
+            PickerHeading(if (hits.isEmpty()) "Nothing found" else "Results")
+            hits.forEach { app -> PickerAppRow(app, open == app.pkg, density, { open = if (open == app.pkg) null else app.pkg }) { connect(it) } }
+        }
+        else -> {
+            // Seelie's own widgets he hasn't added yet, first: they need no permission or setup.
+            if (store.notAdded.isNotEmpty()) {
+                PickerHeading("Seelie")
+                store.notAdded.forEach { kind -> SeelieWidgetRow(kind) { store.add(kind); onAdded() } }
+            }
+            if (suggested.isNotEmpty()) {
+                PickerHeading("Suggestions")
+                suggested.forEach { app -> PickerAppRow(app, open == "s:" + app.pkg, density, { open = if (open == "s:" + app.pkg) null else "s:" + app.pkg }) { connect(it) } }
+            }
+            list.groupBy { it.letter }.forEach { (letter, group) ->
+                PickerHeading(letter, big = true)
+                group.forEach { app -> PickerAppRow(app, open == app.pkg, density, { open = if (open == app.pkg) null else app.pkg }) { connect(it) } }
+            }
         }
     }
 }
 
-/** One widget to pick: its preview picture on a soft card, its name and its size. */
+/** One of Seelie's own widgets: its glyph, name and what it shows. Tap adds it to the stack. */
+@Composable
+private fun SeelieWidgetRow(kind: WidgetKind, onClick: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val press = remember { MutableInteractionSource() }
+    Row(
+        Modifier.staggerIn().fillMaxWidth().pressFeel(press, look.accent, 16.dp).clip(RoundedCornerShape(16.dp))
+            .clickable(interactionSource = press, indication = null, onClick = onClick).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(52.dp).background(kind.tint.copy(alpha = 0.22f), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+            Icon(painterResource(kind.icon), null, tint = kind.tint, modifier = Modifier.size(26.dp))
+        }
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f)) {
+            Text(kind.title, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 18.sp))
+            Text(kind.about, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp))
+        }
+        Text("+", style = TextStyle(color = look.accent, fontSize = 22.sp, fontWeight = FontWeight.Bold))
+    }
+}
+
+@Composable
+private fun PickerHeading(text: String, big: Boolean = false) {
+    val look = LocalLauncherLook.current
+    Text(text, modifier = Modifier.staggerIn().padding(top = if (big) 18.dp else 16.dp, bottom = 6.dp),
+        style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.text, fontSize = if (big) 24.sp else 18.sp))
+}
+
+/** The search box: an app or widget name. */
+@Composable
+private fun PickerSearch(query: String, onQuery: (String) -> Unit) {
+    val look = LocalLauncherLook.current
+    Row(
+        Modifier.staggerIn().padding(bottom = 6.dp).fillMaxWidth().height(52.dp).clip(CircleShape).background(look.card)
+            .border(1.dp, if (query.isNotEmpty()) look.accent.copy(alpha = 0.55f) else Color.White.copy(alpha = 0.08f), CircleShape)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(R.drawable.ic_search), contentDescription = null, tint = look.textDim, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (query.isEmpty()) Text("Search widgets", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 17.sp))
+            BasicTextField(
+                value = query, onValueChange = onQuery, singleLine = true,
+                textStyle = TextStyle(fontFamily = look.font, color = look.text, fontSize = 17.sp),
+                cursorBrush = SolidColor(look.accent),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search, autoCorrectEnabled = false),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (query.isNotEmpty()) {
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable { onQuery("") }, contentAlignment = Alignment.Center) {
+                Text("✕", style = TextStyle(color = look.textDim, fontSize = 16.sp))
+            }
+        }
+    }
+}
+
+/** One app: icon, name, "N widgets". Tapped, its widgets open beneath it as cards. */
+@Composable
+private fun PickerAppRow(app: PickerApp, opened: Boolean, density: Float, onToggle: () -> Unit, onPick: (AppWidgetProviderInfo) -> Unit) {
+    val look = LocalLauncherLook.current
+    val press = remember { MutableInteractionSource() }
+    Row(
+        Modifier.staggerIn().fillMaxWidth().pressFeel(press, look.accent, 16.dp).clip(RoundedCornerShape(16.dp))
+            .clickable(interactionSource = press, indication = null, onClick = onToggle).padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (app.icon != null) Image(app.icon, contentDescription = null, modifier = Modifier.size(52.dp))
+        else Box(Modifier.size(52.dp).background(look.card, RoundedCornerShape(14.dp)))
+        Spacer(Modifier.width(18.dp))
+        Column(Modifier.weight(1f)) {
+            Text(app.name, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 18.sp))
+            Text(if (app.widgets.size == 1) "1 widget" else "${app.widgets.size} widgets",
+                style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp))
+        }
+        Text(if (opened) "⌃" else "⌄", style = TextStyle(color = look.textDim, fontSize = 18.sp))
+    }
+    AnimatedVisibility(visible = opened, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        PickerWidgets(app, density, onPick)
+    }
+}
+
+/** The widgets of one app, as big centred cards (loaded now: preview pictures take a moment). */
+@Composable
+private fun PickerWidgets(app: PickerApp, density: Float, onPick: (AppWidgetProviderInfo) -> Unit) {
+    val context = LocalContext.current
+    val items by produceState<List<PickerItem>?>(null, app.pkg) {
+        value = withContext(Dispatchers.Default) {
+            val pm = context.packageManager
+            app.widgets.map { info ->
+                val preview = runCatching {
+                    (info.loadPreviewImage(context, 0) ?: info.loadIcon(context, 0))?.let { d ->
+                        // Keep pictures small: about 600 px wide is plenty for a card.
+                        val w = max(1, d.intrinsicWidth).coerceAtMost(600)
+                        val h = (w.toFloat() * max(1, d.intrinsicHeight) / max(1, d.intrinsicWidth)).roundToInt().coerceIn(1, 800)
+                        d.toBitmap(w, h).asImageBitmap()
+                    }
+                }.getOrNull()
+                val about = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching { info.loadDescription(context)?.toString() }.getOrNull() else null
+                PickerItem(info, info.loadLabel(pm), about, preview, cellsOf(info, density))
+            }.sortedBy { it.name.lowercase() }
+        }
+    }
+    Column(Modifier.padding(top = 4.dp, bottom = 8.dp)) {
+        val list = items
+        if (list == null) Hint("Loading…") else list.forEach { item -> PickerCard(item) { onPick(item.info) } }
+    }
+}
+
+/** One widget to pick: its preview picture, name and what it shows, centred on a dark card (Niagara's look). */
 @Composable
 private fun PickerCard(item: PickerItem, onClick: () -> Unit) {
     val look = LocalLauncherLook.current
-    val shape = RoundedCornerShape(20.dp)
+    val shape = RoundedCornerShape(26.dp)
     val press = remember { MutableInteractionSource() }
     Column(
         Modifier
-            .staggerIn()
-            .padding(bottom = 10.dp)
+            .padding(bottom = 12.dp)
             .fillMaxWidth()
-            .pressFeel(press, look.accent, 20.dp)
+            .pressFeel(press, look.accent, 26.dp)
             .clip(shape)
             .background(look.card)
             .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
             .clickable(interactionSource = press, indication = null, onClick = onClick)
-            .padding(12.dp)
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            item.preview?.let {
-                Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.padding(8.dp).heightIn(max = 140.dp))
-            }
+        item.preview?.let {
+            Image(it, contentDescription = null, contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 220.dp).clip(RoundedCornerShape(16.dp)))
+            Spacer(Modifier.height(14.dp))
         }
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(item.name, modifier = Modifier.weight(1f),
-                style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 16.sp))
-            Spacer(Modifier.width(8.dp))
-            Text(item.cells, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
-        }
+        Text(item.name, textAlign = TextAlign.Center,
+            style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 18.sp))
+        Text(listOfNotNull(item.about, item.cells).joinToString(" · "), textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp),
+            style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp, lineHeight = 19.sp))
     }
 }
 

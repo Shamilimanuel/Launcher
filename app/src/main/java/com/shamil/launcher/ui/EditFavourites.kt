@@ -169,7 +169,7 @@ fun EditFavouritesScreen(
                     items(widgets.stack, key = { "w-${it.key}" }) { entry ->
                         WidgetEditRow(entry, modifier = Modifier.animateItem(), onClick = { removing = entry })
                     }
-                    item(key = "w-add") { AddWidgetRow { SeelieSettings.open(context, SeelieSettings.PAGE_WIDGETS) } }
+                    item(key = "w-add") { AddWidgetRow { SeelieSettings.open(context, SeelieSettings.PAGE_WIDGET_PICKER) } }
                 }
 
                 item(key = "h-selected") { EditSection("Selected · ${order.size}") }
