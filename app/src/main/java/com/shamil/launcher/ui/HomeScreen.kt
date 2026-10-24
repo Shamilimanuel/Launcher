@@ -1,5 +1,7 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.livebg.rememberLiveBgController
+import com.shamil.launcher.ui.livebg.LivingBackground
 import android.content.BroadcastReceiver
 import android.content.ContentUris
 import android.content.Context
@@ -185,6 +187,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // The weather/stats line and its card. The card closes when you tap away, press Back or open the list.
     val glance = rememberGlanceState()
+    // The living background (Look → Living background): drawn behind everything, fed with the real weather.
+    val liveBg = rememberLiveBgController()
     // His home style: how the clock, date, glance line and widget card look together (one bundle + tweaks).
     val homeStyle = HomeStyleStore.get(context).style
     LaunchedEffect(listLetter) { glance.open = false }
@@ -227,12 +231,22 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     val up = waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: return@awaitEachGesture
                     val moved = (up.position - down.position).getDistance() > viewConfiguration.touchSlop
+                    // A tap anywhere: a little sparkle there, if "Touch sparkle" is on.
+                    if (!moved) liveBg.onTap(up.position.x, up.position.y)
                     val inside = popups.bounds?.contains(down.position) == true
                     if (popups.openKey != null && !moved && !inside) popups.close()
                 }
             }
     ) {
         val screenH = maxHeight
+
+        // First child = drawn first = behind the clock, apps and rail. Paused under the vault and Edit favourites.
+        LivingBackground(
+            Modifier.fillMaxSize(),
+            weather = glance.weather,
+            active = !vaultOpen && !state.editingFavourites,
+            controller = liveBg,
+        )
 
         KeepAliveFade(visible = listLetter == null && !state.searching && !state.editingFavourites) {
             Column(

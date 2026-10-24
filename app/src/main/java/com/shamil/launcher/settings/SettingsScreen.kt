@@ -1,5 +1,7 @@
 package com.shamil.launcher.settings
 
+import com.shamil.launcher.ui.livebg.LiveBgSettingsContent
+import com.shamil.launcher.ui.livebg.LiveBgPreview
 import androidx.activity.compose.BackHandler
 import androidx.annotation.DrawableRes
 import android.content.pm.LauncherApps
@@ -124,7 +126,7 @@ import java.util.Locale
  */
 
 /** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Saves, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
+private enum class Page { Top, Look, LiveBg, Saves, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -152,6 +154,7 @@ private class SettingHit(
 private val SETTINGS_INDEX = listOf(
     SettingHit("Your themes (saves)", "Look · Themes", listOf(Page.Look, Page.Themes), R.drawable.ic_star, Geo, "save saves opslaan saved looks profile profiel preset wallpaper achtergrond"),
     SettingHit("Home style (bundles)", "Look", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_home_filled, Electro, "home style bundle bundles glass floating gold minimal spirit transparent see-through doorzichtig card kaart spacing edge"),
+    SettingHit("Living background", "Look", listOf(Page.Look, Page.LiveBg), R.drawable.ic_wallpaper, Dendro, "living background achtergrond live animated bewegend petals blossom sakura bloesem stars sterren aurora rain regen snow sneeuw storm onweer lanterns lantaarns fireflies vuurvliegjes butterflies vlinders clouds wolken mist tilt weather weer"),
     SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
     SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
     SettingHit("Icon pack and style", "Look", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "icons iconen pack darko themed glass pictogram"),
@@ -287,7 +290,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
                     GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
                     GroupCard(R.drawable.ic_apps, Cryo, "Icons", "Icon pack and icon size") { push(Page.Icons) }
-                    GroupCard(R.drawable.ic_wallpaper, Dendro, "Backgrounds", "Living backgrounds", soon = true)
+                    GroupCard(R.drawable.ic_wallpaper, Dendro, "Living background", "Petals, stars, weather and more over your wallpaper") { push(Page.LiveBg) }
                 }
                 Page.Themes -> PageFrame("Look", "Themes", onBack = ::pop, preview = true) {
                     // Like Niagara's "your themes": his saved looks first (save the current one, apply, rename…), then the built-in ones.
@@ -346,6 +349,9 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     StatsSettingsContent()
                 }
                 // The real card stays pinned at the top while he changes things below.
+                Page.LiveBg -> PageFrame("Look", "Living background", onBack = ::pop, pinned = { LiveBgPreview() }) {
+                    LiveBgSettingsContent(showPreview = false)
+                }
                 Page.Music -> PageFrame("Home screen", "Music card", onBack = ::pop, pinned = { MusicPreview() }) {
                     MusicSettingsContent(showPreview = false)
                 }
