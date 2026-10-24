@@ -32,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shamil.launcher.glance.WeatherSource
@@ -56,109 +57,126 @@ import kotlin.math.roundToInt
 /**
  * The page content. [showPreview] = false when the settings screen pins [LiveBgPreview] at the top instead
  * (recommended, like Music card: PageFrame(…, pinned = { LiveBgPreview() }) { LiveBgSettingsContent(showPreview = false) }).
+ * [part] = one tab of Background (24 Oct, "tap the thing"): "living" (switch, presets, effects) or "scene"
+ * (battery saver, time, weather, mood, calm, frame rate). null = the whole page, as before.
  */
 @Composable
-fun ColumnScope.LiveBgSettingsContent(showPreview: Boolean = true) {
+fun ColumnScope.LiveBgSettingsContent(showPreview: Boolean = true, part: String? = null) {
     val context = LocalContext.current
     val store = remember { LiveBgStore.get(context) }
     val s = store.style
     val gate = rememberSystemGate()
     val weather = remember { WeatherSource.cached(context) }
 
+    val living = part == null || part == "living"
+    val scene = part == null || part == "scene"
+
     if (showPreview) {
         LiveBgPreview()
         Spacer(Modifier.height(6.dp))
     }
-    Hint("A living layer over your own wallpaper and behind your home: petals, stars, clouds and more. Tap the preview to try Touch sparkle.")
+    if (living) Hint("A living layer over your own wallpaper and behind your home: petals, stars, clouds and more. Tap the preview to try Touch sparkle.")
     if (gate.powerSave) Hint(
         if (s.inSaver) "Battery saver is on, so your home runs the light version: calm, 30 fps, and no clouds, mist, light rays or aurora."
         else "Battery saver is on, so your home shows just your wallpaper for now (\"In battery saver\" is off below)."
     )
     // Main switch on but every effect off (e.g. after the "Off" preset): say so, or the home looks broken (24 Oct).
-    if (s.enabled && !s.anythingOn()) Hint("All effects are off, so your home shows just your wallpaper. Pick a preset or switch an effect on below.")
+    if (living && s.enabled && !s.anythingOn()) Hint("All effects are off, so your home shows just your wallpaper. Pick a preset or switch an effect on below.")
     if (!gate.animationsOn) Hint("Android's animations are off (Developer options → Animator duration scale), so the living background rests as well.")
 
-    SectionLabel("Living background")
-    Choice("Living background", ON_OFF, s.enabled.onOff()) { v -> store.change { it.copy(enabled = v == "on") } }
-    Choice("In battery saver", listOf("on" to "Light version", "off" to "Pause"), if (s.inSaver) "on" else "off") { v ->
-        store.change { it.copy(inSaver = v == "on") }
+    if (living) {
+        SectionLabel("Living background")
+        Choice("Living background", ON_OFF, s.enabled.onOff()) { v -> store.change { it.copy(enabled = v == "on") } }
     }
-
-    SectionLabel("Presets")
-    LIVE_BG_PRESETS.chunked(3).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
-            row.forEach { p -> PresetChip(p, selected = s.preset == p.id) { store.usePreset(p) } }
-            repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
-        }
-    }
-    val picked = LIVE_BG_PRESETS.firstOrNull { it.id == s.preset }
-    Hint(
-        if (picked != null) "${picked.desc} It also fixes the time to ${picked.time} and the weather to ${picked.weather}: set them back to Auto and Real below to follow your day."
-        else "Pick one to start from, then change anything below."
-    )
-
-    SectionLabel("Scene")
-    Choice("Time of day", listOf("auto" to "Auto", "dawn" to "Dawn", "day" to "Day", "dusk" to "Dusk", "night" to "Night"), s.time) { v ->
-        store.change { it.copy(time = v) }
-    }
-    Hint(
-        if (s.time == "auto") "Auto follows your clock: dawn 5–8, day 8–17, dusk 17–21, night after that. Some effects only come out at certain times (it says under each one)."
-        else "Fixed, whatever the clock says. Auto follows your clock."
-    )
-    Choice(
-        "Weather",
-        listOf("real" to "Real", "clear" to "Clear", "rain" to "Rain", "storm" to "Storm", "snow" to "Snow", "mist" to "Mist"),
-        s.weather,
-    ) { v -> store.change { it.copy(weather = v) } }
-    Hint(
-        if (s.weather == "real") {
-            val now = weather?.description?.let { " (now: $it)" } ?: " (no weather yet: it counts as clear)"
-            "Follows the weather in your glance line$now. Switch on Rain, Snow and Storm under Weather below to see them when it really happens."
-        } else "Fixed weather, so you can see its effects any time. Real follows the actual weather."
-    )
-    Choice("Colour mood", listOf("gold" to "Gold", "pink" to "Pink", "violet" to "Violet", "green" to "Green"), s.mood) { v ->
-        store.change { it.copy(mood = v) }
-    }
-    Hint("Colours the motes, butterflies, sparkles and lightning, and the glow in the sky.")
-    Choice("Calm mode", ON_OFF, s.calm.onOff()) { v -> store.change { it.copy(calm = v == "on") } }
-    Hint(
-        if (s.calm) "Slower (0.4× speed), about 60% as many things, and no lightning flashes (a storm glows softly instead)."
-        else "Full speed and density, with lightning flashes in a storm."
-    )
-    Choice("Frame rate", listOf("30" to "30 fps", "60" to "60 fps"), if (s.fps60) "60" else "30") { v ->
-        store.change { it.copy(fps60 = v == "60") }
-    }
-    Hint("30 frames a second is smooth for slow things like these and uses about half the battery of 60.")
-    if (!skyEffectsSupported) Hint("Cloud drift, Mist, Light rays and Aurora need Android 13 or newer, so they're off on this phone.")
-
-    FX_GROUPS.forEach { g ->
-        SectionLabel(g.name)
-        Hint(g.sub)
-        LiveFx.ALL.filter { it.group == g.id }.forEach { info ->
-            EffectCard(
-                info = info,
-                f = s.fx(info.id),
-                available = !info.shader || skyEffectsSupported,
-                onToggle = { store.useFx(info.id) { it.copy(on = !it.on) } },
-                onDensity = { v -> store.useFx(info.id) { it.copy(density = v) } },
-                onHeight = { v ->
-                    store.glintGuideAt = SystemClock.uptimeMillis()
-                    store.useFx(info.id) { it.copy(height = v) }
-                },
-            )
+    if (scene) {
+        if (part != null) SectionLabel("Battery")
+        Choice("In battery saver", listOf("on" to "Light version", "off" to "Pause"), if (s.inSaver) "on" else "off") { v ->
+            store.change { it.copy(inSaver = v == "on") }
         }
     }
 
-    Spacer(Modifier.height(8.dp))
-    ResetChip("Back to the starting mix") { store.reset() }
+    if (living) {
+        SectionLabel("Presets")
+        LIVE_BG_PRESETS.chunked(3).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 8.dp)) {
+                row.forEach { p -> PresetChip(p, selected = s.preset == p.id) { store.usePreset(p) } }
+                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+        val picked = LIVE_BG_PRESETS.firstOrNull { it.id == s.preset }
+        Hint(
+            if (picked != null) "${picked.desc} It also fixes the time to ${picked.time} and the weather to ${picked.weather}: set them back to Auto and Real below to follow your day."
+            else "Pick one to start from, then change anything below."
+        )
+    }
+
+    if (scene) {
+        SectionLabel("Scene")
+        Choice("Time of day", listOf("auto" to "Auto", "dawn" to "Dawn", "day" to "Day", "dusk" to "Dusk", "night" to "Night"), s.time) { v ->
+            store.change { it.copy(time = v) }
+        }
+        Hint(
+            if (s.time == "auto") "Auto follows your clock: dawn 5–8, day 8–17, dusk 17–21, night after that. Some effects only come out at certain times (it says under each one)."
+            else "Fixed, whatever the clock says. Auto follows your clock."
+        )
+        Choice(
+            "Weather",
+            listOf("real" to "Real", "clear" to "Clear", "rain" to "Rain", "storm" to "Storm", "snow" to "Snow", "mist" to "Mist"),
+            s.weather,
+        ) { v -> store.change { it.copy(weather = v) } }
+        Hint(
+            if (s.weather == "real") {
+                val now = weather?.description?.let { " (now: $it)" } ?: " (no weather yet: it counts as clear)"
+                "Follows the weather in your glance line$now. Switch on Rain, Snow and Storm under Weather below to see them when it really happens."
+            } else "Fixed weather, so you can see its effects any time. Real follows the actual weather."
+        )
+        Choice("Colour mood", listOf("gold" to "Gold", "pink" to "Pink", "violet" to "Violet", "green" to "Green"), s.mood) { v ->
+            store.change { it.copy(mood = v) }
+        }
+        Hint("Colours the motes, butterflies, sparkles and lightning, and the glow in the sky.")
+        Choice("Calm mode", ON_OFF, s.calm.onOff()) { v -> store.change { it.copy(calm = v == "on") } }
+        Hint(
+            if (s.calm) "Slower (0.4× speed), about 60% as many things, and no lightning flashes (a storm glows softly instead)."
+            else "Full speed and density, with lightning flashes in a storm."
+        )
+        Choice("Frame rate", listOf("30" to "30 fps", "60" to "60 fps"), if (s.fps60) "60" else "30") { v ->
+            store.change { it.copy(fps60 = v == "60") }
+        }
+        Hint("30 frames a second is smooth for slow things like these and uses about half the battery of 60.")
+    }
+    if (!skyEffectsSupported && living) Hint("Cloud drift, Mist, Light rays and Aurora need Android 13 or newer, so they're off on this phone.")
+
+    if (living) {
+        FX_GROUPS.forEach { g ->
+            SectionLabel(g.name)
+            Hint(g.sub)
+            LiveFx.ALL.filter { it.group == g.id }.forEach { info ->
+                EffectCard(
+                    info = info,
+                    f = s.fx(info.id),
+                    available = !info.shader || skyEffectsSupported,
+                    onToggle = { store.useFx(info.id) { it.copy(on = !it.on) } },
+                    onDensity = { v -> store.useFx(info.id) { it.copy(density = v) } },
+                    onHeight = { v ->
+                        store.glintGuideAt = SystemClock.uptimeMillis()
+                        store.useFx(info.id) { it.copy(height = v) }
+                    },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        ResetChip("Back to the starting mix") { store.reset() }
+    }
 }
 
 /**
  * The live preview: the real effects on a little painted dusk sky, running while the page is open (even in battery
  * saver, which only pauses the home). Tap it to try Touch sparkle. Shows the scene it is drawing, e.g. "Dusk · Clear".
+ * [height]: a bit lower when it sits above the Background tabs, so the controls keep room.
  */
 @Composable
-fun LiveBgPreview() {
+fun LiveBgPreview(height: Dp = 240.dp) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
     val store = remember { LiveBgStore.get(context) }
@@ -169,7 +187,7 @@ fun LiveBgPreview() {
         Modifier
             .staggerIn()
             .fillMaxWidth()
-            .height(240.dp)
+            .height(height)
             .clip(shape)
             .background(Brush.verticalGradient(*PREVIEW_SKY))
             .border(1.dp, look.accent.copy(alpha = 0.3f), shape)

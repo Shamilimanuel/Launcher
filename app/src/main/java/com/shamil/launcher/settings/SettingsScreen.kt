@@ -22,7 +22,6 @@ import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.Favourites
 import com.shamil.launcher.apps.IconPack
 import com.shamil.launcher.apps.SeelieIcons
-import com.shamil.launcher.ui.clock.ClockSettingsContent
 import com.shamil.launcher.ui.search.SearchSettingsContent
 import com.shamil.launcher.ui.toggles.TogglesSettingsContent
 import com.shamil.launcher.ui.notify.NotifSettingsContent
@@ -79,6 +78,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
+import com.shamil.launcher.ui.vault.PinLook
+import com.shamil.launcher.ui.vault.PinLookStore
+import com.shamil.launcher.ui.HomePrefs
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -122,11 +127,11 @@ import java.util.Locale
  * Serenitea: the screens of Seelie settings, built from the prototype he reviewed (23 Oct).
  * Behaves like Niagara's settings (its own app, quick fade), looks like Seelie: Cinzel titles,
  * rounded cards with element-coloured icons, and a live preview of the home in his theme.
- * Groups that aren't built yet are shown with a "Soon" tag and can't be opened, so nothing pretends to work.
+ *
+ * Sorted by "tap the thing" (his pick A, 24 Oct): the top page is a mini copy of his home, a tap on a part opens its
+ * page, and every page is cut into short tabs. Each control lives in ONE place (the clock used to be set in three).
+ * The parts and their tabs: [Node] in SettingsMap.kt; what search finds: SettingsIndex.kt.
  */
-
-/** The pages, in the order you can reach them. */
-private enum class Page { Top, Look, Wallpaper, Layout, LiveBg, Saves, Themes, Fonts, Icons, Clock, HomeStyle, Home, Widgets, WidgetPicker, Stats, Toggles, Notifications, Music, Search, Seelie }
 
 // Genshin element colours for the group icons (same as the prototype).
 internal val Pyro = Color(0xFFF08A5D)
@@ -136,46 +141,6 @@ internal val Electro = Color(0xFFB58AE0)
 internal val Dendro = Color(0xFFA5C83B)
 internal val Cryo = Color(0xFF9FD6E3)
 internal val Geo = Color(0xFFF0B232)
-
-/**
- * Everything the settings search can find: a name, where it lives, the pages to open, and extra words
- * (English and Dutch, since his phone is Dutch) that should also find it.
- */
-private class SettingHit(
-    val title: String, val where: String, val path: List<Page>,
-    @DrawableRes val icon: Int, val tint: Color, val words: String,
-) {
-    fun matches(query: String): Boolean {
-        val q = query.trim().lowercase()
-        return title.lowercase().contains(q) || where.lowercase().contains(q) || words.split(' ').any { it.startsWith(q) || q in it }
-    }
-}
-
-private val SETTINGS_INDEX = listOf(
-    SettingHit("Your themes (saves)", "Look · Themes", listOf(Page.Look, Page.Themes), R.drawable.ic_star, Geo, "save saves opslaan saved looks profile profiel preset wallpaper achtergrond"),
-    SettingHit("Wallpaper", "Look", listOf(Page.Look, Page.Wallpaper), R.drawable.ic_wallpaper, Anemo, "wallpaper achtergrond background picture foto photo gallery galerij lock screen vergrendelscherm colours colors kleuren adapt material you"),
-    SettingHit("Home style (bundles)", "Look", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_home_filled, Electro, "home style bundle bundles glass floating gold minimal spirit transparent see-through doorzichtig card kaart spacing edge"),
-    SettingHit("Layout", "Look", listOf(Page.Look, Page.Layout), R.drawable.ic_drag_indicator, Geo, "layout indeling blocks blokken move verplaatsen align uitlijnen centre midden fade vervagen trail spoor sparkles sterretjes order volgorde hide verbergen big day clock position klok positie"),
-    SettingHit("Living background", "Look", listOf(Page.Look, Page.LiveBg), R.drawable.ic_wallpaper, Dendro, "living background achtergrond live animated bewegend petals blossom sakura bloesem stars sterren aurora rain regen snow sneeuw storm onweer lanterns lantaarns fireflies vuurvliegjes butterflies vlinders clouds wolken mist tilt weather weer"),
-    SettingHit("Themes", "Look", listOf(Page.Look, Page.Themes), R.drawable.ic_palette, Pyro, "theme thema colours colors kleuren night gold fuji inazuma sumeru"),
-    SettingHit("Fonts", "Look", listOf(Page.Look, Page.Fonts), R.drawable.ic_text_fields, Hydro, "font fonts lettertype letters text tekst nunito cinzel josefin"),
-    SettingHit("Icon pack and style", "Look", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "icons iconen pack darko themed glass pictogram"),
-    SettingHit("Icon size", "Look · Icons", listOf(Page.Look, Page.Icons), R.drawable.ic_apps, Cryo, "size grootte bigger smaller groter kleiner"),
-    SettingHit("Clock style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_schedule, Geo, "clock klok time tijd neon words woorden colon gold"),
-    SettingHit("Date style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_schedule, Geo, "date datum day dag stamp pill capitals"),
-    SettingHit("Glance line style", "Look · Home style", listOf(Page.Look, Page.HomeStyle), R.drawable.ic_sunny, Geo, "glance weather weer battery batterij line regel glow pill"),
-    SettingHit("Stats card", "Home screen", listOf(Page.Home, Page.Stats), R.drawable.ic_battery_full, Hydro, "stats statistieken battery batterij memory geheugen storage opslag rings ringen uptime wifi temperature temperatuur weather fahrenheit celsius"),
-    SettingHit("Notifications & quick reply", "Home screen", listOf(Page.Home, Page.Notifications), R.drawable.ic_sticky_note_2, Pyro, "notifications meldingen messages berichten reply antwoorden whatsapp quick reply access toegang"),
-    SettingHit("Music card", "Home screen", listOf(Page.Home, Page.Music), R.drawable.ic_music_note, Electro, "music muziek spotify player speler song nummer album media"),
-    SettingHit("Quick toggles", "Home screen", listOf(Page.Home, Page.Toggles), R.drawable.ic_flashlight_on, Anemo, "toggles wifi bluetooth torch zaklamp quiet stil dnd niet storen volume hotspot location locatie airplane vliegtuig"),
-    SettingHit("Widget stack", "Home screen", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "widget widgets stack calendar kalender month maand gauges notes notities week"),
-    SettingHit("Add a widget from an app", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets, Page.WidgetPicker), R.drawable.ic_widgets, Pyro, "app widget toevoegen add spotify agenda"),
-    SettingHit("Widget card style", "Home screen · Widget stack", listOf(Page.Home, Page.Widgets), R.drawable.ic_widgets, Pyro, "card kaart glass solid outline"),
-    SettingHit("Search & commands", "Seelie settings", listOf(Page.Search), R.drawable.ic_search, Hydro, "search zoeken engine zoekmachine duckduckgo google contacts contacten calculator rekenmachine commands timer torch zaklamp"),
-    SettingHit("Default home app", "Seelie", listOf(Page.Seelie), R.drawable.ic_home, Geo, "home launcher default standaard startscherm niagara switch"),
-    SettingHit("Rescue screen (safe mode)", "Seelie", listOf(Page.Seelie), R.drawable.ic_settings, Geo, "rescue safe mode veilige modus crash reset herstel broken kapot"),
-    SettingHit("Version", "Seelie", listOf(Page.Seelie), R.drawable.ic_settings, Geo, "version versie about over"),
-)
 
 /** The search pill at the top of Seelie settings. */
 @Composable
@@ -215,11 +180,11 @@ private fun SettingsSearch(query: String, onQuery: (String) -> Unit) {
     }
 }
 
-/** Pages other screens can open settings on, by name ([SeelieSettings.open] with a page). */
+/** Pages other screens can open settings on, by name ([SeelieSettings.open] with a page): the page and its tab. */
 private val START_PAGES = mapOf(
-    SeelieSettings.PAGE_CLOCK to listOf(Page.Look, Page.HomeStyle),
-    SeelieSettings.PAGE_WIDGETS to listOf(Page.Home, Page.Widgets),
-    SeelieSettings.PAGE_WIDGET_PICKER to listOf(Page.Home, Page.Widgets, Page.WidgetPicker),
+    SeelieSettings.PAGE_CLOCK to listOf(Spot(Node.Clock, Node.Clock.tabOf("Clock"))),
+    SeelieSettings.PAGE_WIDGETS to listOf(Spot(Node.Widgets, Node.Widgets.tabOf("Stack"))),
+    SeelieSettings.PAGE_WIDGET_PICKER to listOf(Spot(Node.Widgets, Node.Widgets.tabOf("Stack")), Spot(picker = true)),
 )
 
 /** One line under each theme's name, from the prototype. */
@@ -234,11 +199,14 @@ private val TAGLINES = mapOf(
 @Composable
 fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) {
     val look = LocalLauncherLook.current
-    // Where you are: a stack of pages, so Back steps out one page at a time.
+    // Where you are: a stack of spots, so Back steps out one page at a time (a tab is not a step: Back from any tab goes up).
     // [startAt] opens straight on a page (e.g. from the home's "Seelie widget" sheet); Back still steps out page by page.
-    var stack by remember { mutableStateOf(listOf(Page.Top) + (START_PAGES[startAt] ?: emptyList())) }
-    fun push(page: Page) { stack = stack + page }
-    // Search on the top page: type a word, tap a result to jump straight to its page.
+    // The tab each page is on lives beside the stack, not in it: flipping a tab must not count as a new page (or slide).
+    val tabs = remember { mutableStateMapOf<Node, Int>() }
+    fun spots(list: List<Spot>): List<Spot> = list.map { s -> s.node?.let { tabs[it] = s.tab }; s.copy(tab = 0) }
+    var stack by remember { mutableStateOf(spots(listOf(Spot()) + (START_PAGES[startAt] ?: emptyList()))) }
+    fun open(node: Node, tab: Int = 0) { stack = stack + spots(listOf(Spot(node, tab))) }
+    // Search on the top page: type a word, tap a result to jump straight to its page and tab.
     var query by remember { mutableStateOf("") }
     fun pop() { if (stack.size > 1) stack = stack.dropLast(1) else onClose() }
     BackHandler(enabled = stack.size > 1) { pop() }
@@ -259,157 +227,272 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
             },
             label = "settings page",
         ) { pages ->
-            val current = looks.currentTheme
-            val fontName = looks.fontId?.let { id -> SeelieFonts.firstOrNull { it.id == id }?.name } ?: "Theme font"
-            when (pages.last()) {
-                Page.Top -> PageFrame("Serenitea", "Seelie settings", onBack = ::pop) {
+            val spot = pages.last()
+            val node = spot.node
+            when {
+                spot.picker -> PageFrame("Widgets", "Pick a widget", onBack = ::pop) {
+                    // After adding, back to the stack tab, where the new widget sits at the end.
+                    AppWidgetPickerContent(onAdded = ::pop)
+                }
+                node == null -> PageFrame("Serenitea", "Seelie settings", onBack = ::pop) {
                     SettingsSearch(query) { query = it }
                     if (query.isNotBlank()) {
                         val hits = SETTINGS_INDEX.filter { it.matches(query) }
-                        SectionLabel(if (hits.isEmpty()) "Nothing found" else "Results")
-                        if (hits.isEmpty()) Hint("Try another word, like theme, font, clock, widget or icon.")
+                        SectionLabel(if (hits.isEmpty()) "Nothing found" else "Results · ${hits.size}")
+                        if (hits.isEmpty()) Hint("Try another word, like theme, font, clock, widget, fade or vault.")
                         hits.forEach { hit ->
                             GroupCard(hit.icon, hit.tint, hit.title, hit.where) {
                                 query = ""
-                                stack = listOf(Page.Top) + hit.path
+                                stack = spots(listOf(Spot(), Spot(hit.node, hit.node.tabOf(hit.tab))))
                             }
                         }
                         return@PageFrame
                     }
-                    HeroLook(summary = "${current.name} · $fontName") { push(Page.Look) }
-                    SectionLabel("Settings")
-                    GroupCard(R.drawable.ic_home, Pyro, "Home screen", "Widget stack, glance & weather, music card") { push(Page.Home) }
-                    GroupCard(R.drawable.ic_list, Anemo, "App list", "Rail wave, hidden apps, slide-to-open, sections", soon = true)
-                    GroupCard(R.drawable.ic_search, Hydro, "Search & commands", "What Seelie searches, the > commands") { push(Page.Search) }
-                    GroupCard(R.drawable.ic_touch_app, Electro, "Gestures", "Swipes and taps on apps and the home screen", soon = true)
-                    GroupCard(R.drawable.ic_lock, Geo, "Privacy", "PIN vault for hidden apps", soon = true)
-                    GroupCard(R.drawable.ic_settings, look.accent, "Seelie", "Default home app, version") { push(Page.Seelie) }
-                }
-                Page.Look -> PageFrame("Serenitea", "Look", onBack = ::pop, preview = true) {
-                    // The bundles: clock, date, the line under it and the widget card as one matching set.
-                    val homeStyle = HomeStyleStore.get(LocalContext.current)
-                    GroupCard(R.drawable.ic_wallpaper, Anemo, "Wallpaper", "Pick your own picture · colours can follow it") { push(Page.Wallpaper) }
-                    GroupCard(R.drawable.ic_star, Geo, "Your themes", SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Save your look as a theme, with its own wallpaper" else "$it saved · plus the built-in themes" }) { push(Page.Themes) }
-                    GroupCard(R.drawable.ic_home_filled, Electro, "Home style", homeStyle.bundle.title + if (homeStyle.isCustom) " · custom" else "") { push(Page.HomeStyle) }
-                    GroupCard(R.drawable.ic_drag_indicator, Geo, "Layout", "Move, line up and switch off parts · fade · Seelie touches") { push(Page.Layout) }
-                    GroupCard(R.drawable.ic_palette, Pyro, "Themes", current.name) { push(Page.Themes) }
-                    GroupCard(R.drawable.ic_text_fields, Hydro, "Fonts", fontName) { push(Page.Fonts) }
-                    GroupCard(R.drawable.ic_apps, Cryo, "Icons", "Icon pack and icon size") { push(Page.Icons) }
-                    GroupCard(R.drawable.ic_wallpaper, Dendro, "Living background", "Petals, stars, weather and more over your wallpaper") { push(Page.LiveBg) }
-                }
-                Page.Wallpaper -> PageFrame("Look", "Wallpaper", onBack = ::pop) {
-                    WallpaperSettingsContent()
-                }
-                Page.Themes -> PageFrame("Look", "Themes", onBack = ::pop, preview = true) {
-                    // Like Niagara's "your themes": his saved looks first (save the current one, apply, rename…), then the built-in ones.
-                    SectionLabel(SavesStore.get(LocalContext.current).saves.size.let { if (it == 0) "Your themes" else "Your themes · $it" })
-                    SavesSettingsContent(intro = false)
-                    SectionLabel("Built-in themes")
-                    Hint("A theme sets the colours and font of all of Seelie. Tap one and the preview changes.")
-                    // First: "Match my wallpaper" (colours from his own wallpaper), then the built-in themes.
-                    (listOfNotNull(looks.wallpaperLook) + SeelieThemes).chunked(2).forEach { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
-                            pair.forEach { theme ->
-                                ThemeTile(theme, selected = theme.id == looks.themeId) { looks.setTheme(theme.id) }
-                            }
+                    SectionLabel("Tap a part of your home")
+                    MiniHome(onPick = { open(it) })
+                    SectionLabel("Everything else")
+                    listOf(Node.Style, Node.Privacy, Node.Saves, Node.About).chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                            pair.forEach { n -> NodeTile(n) { open(n) } }
                         }
                     }
                 }
-                Page.Fonts -> PageFrame("Look", "Fonts", onBack = ::pop, preview = true) {
-                    TextColourSettings(looks)
-                    SectionLabel("Font")
-                    FontRow("Theme font", "Whatever the theme comes with", current.font, selected = looks.fontId == null) { looks.setFont(null) }
-                    SeelieFonts.forEach { font ->
-                        FontRow(font.name, null, font.family, selected = looks.fontId == font.id) { looks.setFont(font.id) }
+                else -> {
+                    // Flipping a tab stays on the same page: it starts at the top and its cards float in again.
+                    val tab = (tabs[node] ?: 0).coerceIn(0, (node.tabs.size - 1).coerceAtLeast(0))
+                    PageFrame(
+                        "Serenitea", node.title, onBack = ::pop,
+                        pinned = pinnedPreview(node),
+                        tabs = node.tabs, tab = tab, onTab = { tabs[node] = it },
+                    ) {
+                        NodeContent(node, node.tabs.getOrNull(tab), looks, onOpen = ::open, onPicker = { stack = stack + Spot(picker = true) })
                     }
-                }
-                Page.Icons -> PageFrame("Look", "Icons", onBack = ::pop) {
-                    IconsPage(looks)
-                }
-                // The live preview stays pinned at the top while he scrolls through the controls (his ask, 23 Oct).
-                Page.Saves -> PageFrame("Look", "My saves", onBack = ::pop) {
-                    SavesSettingsContent()
-                }
-                Page.HomeStyle -> PageFrame("Look", "Home style", onBack = ::pop, pinned = { HomePreview() }) {
-                    HomeStyleSettingsContent()
-                }
-                Page.Clock -> PageFrame("Look", "Clock & date", onBack = ::pop) {
-                    ClockSettingsContent()
-                }
-                Page.Home -> PageFrame("Serenitea", "Home screen", onBack = ::pop) {
-                    val widgets = WidgetStore.get(LocalContext.current).stack.size
-                    GroupCard(R.drawable.ic_widgets, Pyro, "Widget stack", if (widgets == 1) "1 widget" else "$widgets widgets") { push(Page.Widgets) }
-                    GroupCard(R.drawable.ic_battery_full, Hydro, "Stats card", "Which stats, the weather part, ring style") { push(Page.Stats) }
-                    GroupCard(R.drawable.ic_sticky_note_2, Pyro, "Notifications", "Messages on your favourites, quick reply per app") { push(Page.Notifications) }
-                    GroupCard(R.drawable.ic_flashlight_on, Anemo, "Quick toggles", "Wi-Fi, Bluetooth, Torch, Quiet between your favourites") { push(Page.Toggles) }
-                    GroupCard(R.drawable.ic_sunny, Geo, "Glance & weather", "Weather city, what the line shows", soon = true)
-                    GroupCard(R.drawable.ic_music_note, Electro, "Music card", "A player that keeps its spot") { push(Page.Music) }
-                }
-                Page.Widgets -> PageFrame("Home screen", "Widget stack", onBack = ::pop) {
-                    WidgetStackSettingsContent(onAddFromApp = { push(Page.WidgetPicker) })
-                }
-                Page.WidgetPicker -> PageFrame("Widget stack", "Pick a widget", onBack = ::pop) {
-                    // After adding, back to the stack page, where the new widget sits at the end.
-                    AppWidgetPickerContent(onAdded = ::pop)
-                }
-                // The real card stays pinned at the top while he changes things below.
-                Page.Stats -> PageFrame("Home screen", "Stats card", onBack = ::pop, pinned = { StatsPreview() }) {
-                    StatsSettingsContent()
-                }
-                // The real card stays pinned at the top while he changes things below.
-                Page.Layout -> PageFrame("Look", "Layout", onBack = ::pop, pinned = { HomePreview() }) {
-                    LayoutSettingsContent(onClockFaces = { push(Page.Clock) })
-                }
-                Page.LiveBg -> PageFrame("Look", "Living background", onBack = ::pop, pinned = { LiveBgPreview() }) {
-                    LiveBgSettingsContent(showPreview = false)
-                }
-                Page.Music -> PageFrame("Home screen", "Music card", onBack = ::pop, pinned = { MusicPreview() }) {
-                    MusicSettingsContent(showPreview = false)
-                }
-                Page.Notifications -> PageFrame("Home screen", "Notifications", onBack = ::pop) {
-                    NotifSettingsContent()
-                }
-                Page.Toggles -> PageFrame("Home screen", "Quick toggles", onBack = ::pop) {
-                    TogglesSettingsContent()
-                }
-                Page.Search -> PageFrame("Serenitea", "Search & commands", onBack = ::pop) {
-                    SearchSettingsContent()
-                }
-                Page.Seelie -> PageFrame("Serenitea", "Seelie", onBack = ::pop) {
-                    val context = LocalContext.current
-                    GroupCard(R.drawable.ic_home, look.accent, "Default home app", "Pick Seelie or another launcher") {
-                        openSafely(context, DefaultHome.settingsIntent())
-                    }
-                    GroupCard(R.drawable.ic_settings, Geo, "Rescue screen", "What opens if Seelie keeps crashing: reset the look, switch home app") {
-                        com.shamil.launcher.SafeMode.open(context)
-                    }
-                    val version = remember {
-                        @Suppress("DEPRECATION")   // the newer form needs Android 13; this one works everywhere
-                        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
-                    }
-                    Hint("Seelie $version · made by Shamil, with Claude")
                 }
             }
         }
     }
 }
 
-/** A page: back button + small gold eyebrow + big Cinzel title, an optional live preview that stays put, then the scrolling content. */
+/**
+ * The live preview that stays above a page's tabs while he scrolls (his ask, 23 Oct). One per page, the same on every
+ * tab, so the tabs never jump when he flips between them.
+ */
+private fun pinnedPreview(node: Node): (@Composable () -> Unit)? = when (node) {
+    Node.Background -> { { LiveBgPreview(height = 170.dp) } }
+    // Not Widgets: its Stack tab shows the real stack itself (two live copies of an app widget freeze one of them).
+    Node.Clock -> { { HomePreview() } }
+    Node.Style -> { { HomePreview(scale = 0.6f) } }
+    Node.Music -> { { MusicPreview() } }
+    else -> null
+}
+
+/** What each page shows on each tab. Where two old pages both set a part (Layout and Home style), its tab shows both slices. */
+@Composable
+private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, onOpen: (Node, Int) -> Unit, onPicker: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val context = LocalContext.current
+    when (node) {
+        Node.Background -> when (tab) {
+            "Wallpaper" -> WallpaperSettingsContent()
+            "Living" -> LiveBgSettingsContent(showPreview = false, part = "living")
+            "Scene" -> LiveBgSettingsContent(showPreview = false, part = "scene")
+            "Fade" -> LayoutSettingsContent(part = "fade")
+        }
+        Node.Clock -> when (tab) {
+            "Clock" -> { HomeStyleSettingsContent(part = "clock"); LayoutSettingsContent(part = "clock") }
+            "Date" -> { HomeStyleSettingsContent(part = "date"); LayoutSettingsContent(part = "date") }
+            "Glance line" -> {
+                HomeStyleSettingsContent(part = "glance")
+                LayoutSettingsContent(part = "glance")
+                GlanceShows()
+            }
+            "Spacing" -> {
+                HomeStyleSettingsContent(part = "spacing")
+                HomeStyleSettingsContent(part = "touch")
+                LayoutSettingsContent(part = "touches")
+            }
+        }
+        Node.Widgets -> when (tab) {
+            "Stack" -> {
+                LayoutSettingsContent(part = "widgets")
+                WidgetStackSettingsContent(onAddFromApp = onPicker)
+            }
+            "Card" -> {
+                Box(Modifier.padding(bottom = 6.dp)) { HomePreview() }
+                HomeStyleSettingsContent(part = "card")
+            }
+            "Stats" -> {
+                // The stats card isn't in the home preview above (it opens from the line under the date), so it shows here.
+                Box(Modifier.staggerIn().padding(bottom = 6.dp)) { StatsPreview() }
+                StatsSettingsContent()
+            }
+        }
+        Node.Music -> MusicSettingsContent(showPreview = false, part = when (tab) { "Cover" -> "cover"; "Controls" -> "controls"; else -> "card" })
+        Node.Favourites -> when (tab) {
+            "List" -> {
+                Hint("To pick, search and reorder your favourites: hold the empty space next to the clock → Edit favourites (or long-press an app).")
+                LayoutSettingsContent(part = "favs")
+            }
+            "Apps" -> {
+                Hint("These live on the apps themselves, so they're one hold away wherever you are.")
+                GroupInfo(R.drawable.ic_visibility_off, Hydro, "Hidden apps", "Near the end of the A–Z list: tap \"Hidden apps\" to see them, long-press one → Show in app list.")
+                GroupInfo(R.drawable.ic_edit, Geo, "Rename or hide an app", "Long-press the app → Rename, or Hide from app list.")
+                GroupInfo(R.drawable.ic_touch_app, Electro, "Swipe left on an app", "Long-press the app → Swipe left, and pick what a swipe on it does.")
+            }
+            "Notifications" -> NotifSettingsContent()
+            "Toggles" -> TogglesSettingsContent()
+        }
+        Node.Rail -> when (tab) {
+            "Style" -> {
+                LayoutSettingsContent(part = "rail")
+                SectionLabel("Letters")
+                TextColourSettings(looks, part = "rail")
+            }
+            "Feel" -> {
+                LayoutSettingsContent(part = "thumb")
+                SectionLabel("On the rail")
+                Hint("Slide your thumb off the rail onto the list and let go on an app to open it. Hold • at the bottom of the rail to open your vault.")
+            }
+        }
+        Node.Search -> SearchSettingsContent()
+        Node.Style -> when (tab) {
+            "Theme" -> {
+                Hint("A theme sets the colours and font of all of Seelie. Tap one and the preview changes.")
+                // First: "Match my wallpaper" (colours from his own wallpaper), then the built-in themes.
+                (listOfNotNull(looks.wallpaperLook) + SeelieThemes).chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
+                        pair.forEach { theme ->
+                            ThemeTile(theme, selected = theme.id == looks.themeId) { looks.setTheme(theme.id) }
+                        }
+                    }
+                }
+                // His own saved looks moved to Saves & backup (one place); a way there from where he'd look for them.
+                val saves = SavesStore.get(context).saves.size
+                GroupCard(R.drawable.ic_star, Geo, "Your saved looks", if (saves == 0) "Save your whole look, with its own wallpaper" else "$saves saved · in Saves & backup") {
+                    onOpen(Node.Saves, Node.Saves.tabOf("Saves"))
+                }
+            }
+            "Colours" -> TextColourSettings(looks, part = "text")
+            "Fonts" -> {
+                SectionLabel("Font")
+                FontRow("Theme font", "Whatever the theme comes with", looks.currentTheme.font, selected = looks.fontId == null) { looks.setFont(null) }
+                SeelieFonts.forEach { font ->
+                    FontRow(font.name, null, font.family, selected = looks.fontId == font.id) { looks.setFont(font.id) }
+                }
+            }
+            "Icons" -> IconsPage(looks)
+            "Bundles & layouts" -> {
+                HomeStyleSettingsContent(part = "bundles")
+                LayoutSettingsContent(part = "layouts")
+                LayoutSettingsContent(part = "order")
+            }
+        }
+        Node.Privacy -> {
+            Hint("Your vault keeps apps behind a code. Its own settings stay inside it, so nobody can change them without your code.")
+            SectionLabel("PIN look")
+            val pins = remember { PinLookStore.get(context) }
+            PinLook.entries.filter { it.built }.forEach { l ->
+                PresetRow(l.title, PIN_LOOK_ABOUT[l] ?: "", selected = pins.look == l) { pins.use(l) }
+            }
+            SectionLabel("Inside the vault")
+            GroupInfo(R.drawable.ic_lock, Electro, "Open the vault", "Hold • at the bottom of the A–Z rail and type your code.")
+            GroupInfo(R.drawable.ic_visibility_off, Hydro, "In there", "The apps you hid in the vault, your PIN and password, fingerprint, which code opens it, and the fun lock.")
+            GroupInfo(R.drawable.ic_touch_app, Geo, "Lock one app", "Long-press the app → Lock with code.")
+        }
+        Node.Saves -> when (tab) {
+            "Saves" -> CompositionLocalProvider(LocalPreviewGlance provides com.shamil.launcher.ui.rememberGlanceState()) { SavesSettingsContent() }
+            "Backup & share" -> {
+                GroupCard(R.drawable.ic_history, Dendro, "Backup & restore", "Everything in one file, back in one tap", soon = true)
+                GroupCard(R.drawable.ic_star, Geo, "Share or import a theme", "As a file or a link", soon = true)
+                Hint("Import from Niagara (your favourites and their names) works from a computer for now.")
+            }
+        }
+        Node.About -> {
+            GroupCard(R.drawable.ic_home, look.accent, "Default home app", "Pick Seelie or another launcher") {
+                openSafely(context, DefaultHome.settingsIntent())
+            }
+            GroupCard(R.drawable.ic_settings, Geo, "Rescue screen", "What opens if Seelie keeps crashing: reset the look, switch home app") {
+                com.shamil.launcher.SafeMode.open(context)
+            }
+            val version = remember {
+                @Suppress("DEPRECATION")   // the newer form needs Android 13; this one works everywhere
+                runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"
+            }
+            Hint("Seelie $version · made by Shamil, with Claude")
+        }
+    }
+}
+
+/** One line under each PIN look's name. */
+private val PIN_LOOK_ABOUT = mapOf(
+    PinLook.GLASS to "Small frosted keys low on the screen, thin gold rings",
+    PinLook.SEELIE to "The dots are glowing seelie orbs that fly in as you type",
+    PinLook.TRAIL to "A trail of light between the keys",
+    PinLook.ROUND to "The first pad: big round keys",
+)
+
+/**
+ * What the line under the date shows (weather, battery %, next event). Also in the home's "Seelie widget" sheet as a
+ * quick switch; here it sits with the rest of the line's settings.
+ */
+@Composable
+private fun GlanceShows() {
+    val context = LocalContext.current
+    val home = remember { HomePrefs.get(context) }
+    SectionLabel("What it shows")
+    Choice("Weather", ON_OFF, home.showWeather.onOff()) { home.useWeather(it == "on") }
+    Choice("Battery percentage", ON_OFF, home.showBattery.onOff()) { home.useBattery(it == "on") }
+    Choice("Next event", ON_OFF, home.showEvent.onOff()) { home.useEvent(it == "on") }
+    GroupCard(R.drawable.ic_location_on, Geo, "Weather city", "Comes from your rough location for now", soon = true)
+}
+
+/** A card that says where something lives, without a › (it isn't a page in settings). */
+@Composable
+private fun GroupInfo(@DrawableRes icon: Int, tint: Color, title: String, sub: String) {
+    val look = LocalLauncherLook.current
+    val shape = RoundedCornerShape(22.dp)
+    Row(
+        Modifier
+            .staggerIn()
+            .padding(bottom = 10.dp)
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.08f), look.card)))
+            .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconTile(icon, tint)
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 17.sp))
+            Text(sub, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp, lineHeight = 18.sp))
+        }
+    }
+}
+
+/**
+ * A page: back button + small gold eyebrow + big Cinzel title, an optional live preview that stays put, the page's
+ * short tabs (if it has any), then the scrolling content. A new tab starts at the top and its cards float in again.
+ */
 @Composable
 internal fun PageFrame(
     eyebrow: String, title: String, onBack: () -> Unit, preview: Boolean = false,
     /** Something that stays at the top while the page scrolls (e.g. Home style's live preview). */
     pinned: (@Composable () -> Unit)? = null,
+    /** The pill tabs under the preview (empty = a page without tabs), which one is picked, and what a tap does. */
+    tabs: List<String> = emptyList(), tab: Int = 0, onTab: (Int) -> Unit = {},
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val look = LocalLauncherLook.current
-    val scroll = rememberScrollState()
+    val scroll = remember(tab) { ScrollState(0) }
     // 0 = at the top, 1 = scrolled ~140dp down: the big title shrinks and the small eyebrow fades away.
     val collapseDistance = with(LocalDensity.current) { 140.dp.toPx() }
     val collapse = { (scroll.value / collapseDistance).coerceIn(0f, 1f) }
     val back = remember { MutableInteractionSource() }
     // Stagger: every card on this page takes the next number, so they float in one after another.
-    CompositionLocalProvider(LocalStagger provides remember { Stagger() }) {
+    CompositionLocalProvider(LocalStagger provides remember(tab) { Stagger() }) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
@@ -447,14 +530,18 @@ internal fun PageFrame(
                 Box(Modifier.padding(horizontal = 18.dp)) { pinned() }
                 Spacer(Modifier.height(6.dp))
             }
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(scroll)
-                    .navigationBarsPadding()
-                    .padding(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 24.dp),
-                content = content,
-            )
+            if (tabs.size > 1) TabPills(tabs, tab, onTab)
+            // key(tab): the new tab's cards are new, so they stagger in like a fresh page.
+            key(tab) {
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .verticalScroll(scroll)
+                        .navigationBarsPadding()
+                        .padding(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 24.dp),
+                    content = content,
+                )
+            }
         }
     }
 }
@@ -662,36 +749,6 @@ internal fun LivePreview(modifier: Modifier = Modifier, height: Int = 200) {
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 9.sp, letterSpacing = 1.5.sp),
         )
-    }
-}
-
-/** The big "Look" card on the top page: the preview with what's picked underneath. */
-@Composable
-private fun HeroLook(summary: String, onClick: () -> Unit) {
-    val look = LocalLauncherLook.current
-    val shape = RoundedCornerShape(26.dp)
-    val press = remember { MutableInteractionSource() }
-    Column(
-        Modifier
-            .staggerIn()
-            .fillMaxWidth()
-            .pressFeel(press, look.accent, 26.dp)
-            .clip(shape)
-            .border(1.5.dp, look.accent.copy(alpha = 0.6f), shape)
-            .background(look.card)
-            .clickable(interactionSource = press, indication = null, onClick = onClick)
-    ) {
-        LivePreview(height = 170)
-        Row(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconTile(R.drawable.ic_palette, look.accent)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Look", style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 19.sp))
-                Text("Themes and fonts", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
-                Text(summary, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.accent, fontSize = 13.sp))
-            }
-            Icon(painterResource(R.drawable.ic_chevron_right), contentDescription = null, tint = look.textDim)
-        }
     }
 }
 

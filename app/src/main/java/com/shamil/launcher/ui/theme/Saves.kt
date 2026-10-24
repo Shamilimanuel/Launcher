@@ -170,6 +170,9 @@ class SavesStore private constructor(private val context: Context) {
         PinLookStore.get(context).reload()
     }
 
+    /** What the look settings hold right now, in a save's snapshot shape (read only: the previews compare against it). */
+    fun currentSnapshot(): JSONObject = snapshot()
+
     /** Every look settings file, entry by entry, with its type so it can be put back exactly. */
     private fun snapshot(): JSONObject = JSONObject().apply {
         for (file in FILES) {

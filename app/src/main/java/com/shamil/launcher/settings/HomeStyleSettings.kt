@@ -1,5 +1,6 @@
 package com.shamil.launcher.settings
 
+import com.shamil.launcher.ui.widgets.WidgetStore
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
@@ -66,97 +67,117 @@ import kotlin.math.roundToInt
  * Seelie settings → Look → Home style (23 Oct, he said "add every single one" of the bundles, and
  * "make it customizable to the very last detail"): a live preview of the home's top, the five bundles,
  * then every Fine-tune control from the bundles page. Changing anything marks it Custom; Reset goes back.
+ *
+ * Since the "tap the thing" settings (24 Oct) each slice sits on the tab of the part it styles: [part] picks one of
+ * "bundles", "clock", "date", "glance", "card", "spacing", "touch"; null still shows the whole page.
  */
 
 /** What picking a card style sets the see-through level and border to (like the bundles page), so a change always shows. */
 private val CARD_DEFAULTS = mapOf("none" to (0 to false), "glass" to (55 to true), "solid" to (90 to false), "outline" to (78 to true))
 
 @Composable
-fun ColumnScope.HomeStyleSettingsContent() {
+fun ColumnScope.HomeStyleSettingsContent(part: String? = null) {
     val context = LocalContext.current
     val store = remember { HomeStyleStore.get(context) }
     val s = store.style
     fun change(edit: (HomeStyle) -> HomeStyle) = store.change(edit)
+    fun show(p: String) = part == null || part == p
 
-    Hint("A bundle styles your clock, date, the line under it and the widget card as one matching set. Pick one, then change any detail below.")
+    if (show("bundles")) {
+        Hint(if (part == null) "A bundle styles your clock, date, the line under it and the widget card as one matching set. Pick one, then change any detail below."
+            else "A bundle styles your clock, date, the line under it and the widget card as one matching set. Fine-tune each part on its own tab (Clock & date, Widgets → Card).")
 
-    SectionLabel(if (store.isCustom) "Bundles · yours is custom" else "Bundles")
-    HomeBundle.entries.chunked(2).forEach { pair ->
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-            pair.forEach { b -> BundleTile(b, selected = store.bundle == b, custom = store.bundle == b && store.isCustom) { store.useBundle(b) } }
-            if (pair.size == 1) Spacer(Modifier.weight(1f))
-        }
-    }
-    if (store.isCustom) {
-        ResetChip("Reset to ${store.bundle.title}") { store.reset() }
-    }
-
-    SectionLabel("Clock")
-    // Every clock face as a tile (23 Oct: clock and date now live only here). "Home style" is the one the controls below shape.
-    val clocks = remember { ClockStore.get(context) }
-    val clockTime = rememberClockTime()
-    val is24h = DateFormat.is24HourFormat(context)
-    ClockStyle.entries.chunked(2).forEach { pair ->
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-            pair.forEach { face ->
-                DateTile(face.label, selected = clocks.clockStyle == face, onClick = { clocks.useClockStyle(face) }) {
-                    ClockFace(face, clockTime, is24h, scale = if (face == ClockStyle.Stacked || face == ClockStyle.Vertical || face == ClockStyle.Words) 0.32f else 0.42f)
-                }
+        SectionLabel(if (store.isCustom) "Bundles · yours is custom" else "Bundles")
+        HomeBundle.entries.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                pair.forEach { b -> BundleTile(b, selected = store.bundle == b, custom = store.bundle == b && store.isCustom) { store.useBundle(b) } }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
-            if (pair.size == 1) Spacer(Modifier.weight(1f))
+        }
+        if (store.isCustom) {
+            ResetChip("Reset to ${store.bundle.title}") { store.reset() }
         }
     }
-    Hint(if (clocks.clockStyle == ClockStyle.Classic) "Shape the Home style clock below." else "Font, size, weight and colour below shape the \"Home style\" face; ${clocks.clockStyle.label} has its own look.")
-    Choice("Font", listOf("theme" to "Theme font", "cinzel" to "Cinzel"), s.clockFont) { v -> change { it.copy(clockFont = v) } }
-    Slide("Size", s.clockSize, 30f..64f, 33, "sp") { v -> change { it.copy(clockSize = v.roundToInt().toFloat()) } }
-    Choice("Weight", listOf("300" to "Light", "600" to "Medium", "800" to "Bold"), nearestWeight(s.clockWeight)) { v -> change { it.copy(clockWeight = v.toInt()) } }
-    Choice("Colour", listOf("white" to "White", "accent" to "Accent", "gold" to "Gold", "glass" to "Glass"), s.clockColor) { v -> change { it.copy(clockColor = v) } }
 
-    SectionLabel("Date")
-    // Every date look as a tile that draws today's date in that look (12 of them; he asked for more, 23 Oct).
-    val time = rememberClockTime()
-    DATE_LOOKS.chunked(2).forEach { pair ->
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
-            pair.forEach { (id, title) ->
-                DateTile(title, selected = s.dateStyle == id, onClick = { change { it.copy(dateStyle = id) } }) {
-                    BundleDate(time, scale = 0.72f, lookOverride = id)
+    if (show("clock")) {
+        SectionLabel(if (part == null) "Clock" else "Face")
+        // Every clock face as a tile (23 Oct: clock and date now live only here). "Home style" is the one the controls below shape.
+        val clocks = remember { ClockStore.get(context) }
+        val clockTime = rememberClockTime()
+        val is24h = DateFormat.is24HourFormat(context)
+        ClockStyle.entries.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                pair.forEach { face ->
+                    DateTile(face.label, selected = clocks.clockStyle == face, onClick = { clocks.useClockStyle(face) }) {
+                        ClockFace(face, clockTime, is24h, scale = if (face == ClockStyle.Stacked || face == ClockStyle.Vertical || face == ClockStyle.Words) 0.32f else 0.42f)
+                    }
                 }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
-            if (pair.size == 1) Spacer(Modifier.weight(1f))
         }
+        Hint(if (clocks.clockStyle == ClockStyle.Classic) "Shape the Home style clock below." else "Font, size, weight and colour below shape the \"Home style\" face; ${clocks.clockStyle.label} has its own look.")
+        Choice("Font", listOf("theme" to "Theme font", "cinzel" to "Cinzel"), s.clockFont) { v -> change { it.copy(clockFont = v) } }
+        Slide("Size", s.clockSize, 30f..64f, 33, "sp") { v -> change { it.copy(clockSize = v.roundToInt().toFloat()) } }
+        Choice("Weight", listOf("300" to "Light", "600" to "Medium", "800" to "Bold"), nearestWeight(s.clockWeight)) { v -> change { it.copy(clockWeight = v.toInt()) } }
+        Choice("Colour", listOf("white" to "White", "accent" to "Accent", "gold" to "Gold", "glass" to "Glass"), s.clockColor) { v -> change { it.copy(clockColor = v) } }
     }
-    Slide("Size", s.dateSize, 11f..20f, 17, "sp") { v -> change { it.copy(dateSize = (v * 2).roundToInt() / 2f) } }
-    Choice("Colour", COLOURS, s.dateColor) { v -> change { it.copy(dateColor = v) } }
-    Choice("Hairline under the date", ON_OFF, s.dateRule.onOff()) { v -> change { it.copy(dateRule = v == "on") } }
 
-    SectionLabel("Line under the date")
-    Choice("Style", listOf("plain" to "Plain", "pill" to "Pill", "glow" to "Glow"), s.glanceStyle) { v -> change { it.copy(glanceStyle = v) } }
-    Slide("Size", s.glanceSize, 11f..18f, 13, "sp") { v -> change { it.copy(glanceSize = (v * 2).roundToInt() / 2f) } }
-    Choice("Colour", COLOURS, s.glanceColor) { v -> change { it.copy(glanceColor = v) } }
-    Choice("Date and this line on one line", ON_OFF, s.inline.onOff()) { v -> change { it.copy(inline = v == "on") } }
-
-    SectionLabel("Widget card")
-    Choice("Style", listOf("none" to "None", "glass" to "Glass", "solid" to "Solid", "outline" to "Outline"), s.cardStyle) { v ->
-        val (opacity, border) = CARD_DEFAULTS.getValue(v)
-        change { it.copy(cardStyle = v, cardOpacity = opacity, cardBorder = border) }
+    if (show("date")) {
+        SectionLabel(if (part == null) "Date" else "Look")
+        // Every date look as a tile that draws today's date in that look (12 of them; he asked for more, 23 Oct).
+        val time = rememberClockTime()
+        DATE_LOOKS.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                pair.forEach { (id, title) ->
+                    DateTile(title, selected = s.dateStyle == id, onClick = { change { it.copy(dateStyle = id) } }) {
+                        BundleDate(time, scale = 0.72f, lookOverride = id)
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Slide("Size", s.dateSize, 11f..20f, 17, "sp") { v -> change { it.copy(dateSize = (v * 2).roundToInt() / 2f) } }
+        Choice("Colour", COLOURS, s.dateColor) { v -> change { it.copy(dateColor = v) } }
+        Choice("Hairline under the date", ON_OFF, s.dateRule.onOff()) { v -> change { it.copy(dateRule = v == "on") } }
     }
-    val noCard = s.cardStyle == "none"
-    Slide("See-through (0% = fully transparent)", s.cardOpacity.toFloat(), 0f..100f, 19, "%", enabled = !noCard) { v -> change { it.copy(cardOpacity = v.roundToInt()) } }
-    Slide("Corner rounding", s.cardRadius.toFloat(), 0f..36f, 35, "dp", enabled = !noCard) { v -> change { it.copy(cardRadius = v.roundToInt()) } }
-    Choice("Border", ON_OFF, s.cardBorder.onOff(), enabled = !noCard) { v -> change { it.copy(cardBorder = v == "on") } }
-    Choice("Widget size", listOf("full" to "Full", "compact" to "Compact"), s.cardSize) { v -> change { it.copy(cardSize = v) } }
-    Choice("Headings and rings", listOf("theme" to "Theme accent", "gold" to "Gold"), s.cardAccent) { v -> change { it.copy(cardAccent = v) } }
-    Choice("Today marker", COLOURS, s.cardToday) { v -> change { it.copy(cardToday = v) } }
 
-    SectionLabel("Spacing and edge")
-    Slide("Clock to date", s.gap1.toFloat(), 0f..16f, 15, "dp") { v -> change { it.copy(gap1 = v.roundToInt()) } }
-    Slide("Date to the line", s.gap2.toFloat(), 0f..20f, 19, "dp") { v -> change { it.copy(gap2 = v.roundToInt()) } }
-    Slide("Line to the widget", s.gap3.toFloat(), 6f..32f, 25, "dp") { v -> change { it.copy(gap3 = v.roundToInt()) } }
-    Slide("Left edge (all four)", s.edge.toFloat(), 24f..64f, 39, "dp") { v -> change { it.copy(edge = v.roundToInt()) } }
+    if (show("glance")) {
+        SectionLabel(if (part == null) "Line under the date" else "Look")
+        Choice("Style", listOf("plain" to "Plain", "pill" to "Pill", "glow" to "Glow"), s.glanceStyle) { v -> change { it.copy(glanceStyle = v) } }
+        Slide("Size", s.glanceSize, 11f..18f, 13, "sp") { v -> change { it.copy(glanceSize = (v * 2).roundToInt() / 2f) } }
+        Choice("Colour", COLOURS, s.glanceColor) { v -> change { it.copy(glanceColor = v) } }
+        Choice("Date and this line on one line", ON_OFF, s.inline.onOff()) { v -> change { it.copy(inline = v == "on") } }
+    }
 
-    SectionLabel("The Seelie touch")
-    Choice("Spirit, breathing colon and sparkle", ON_OFF, s.spirit.onOff()) { v -> change { it.copy(spirit = v == "on") } }
-    if (store.isCustom) ResetChip("Reset to ${store.bundle.title}") { store.reset() }
+    if (show("card")) {
+        SectionLabel("Widget card")
+        if (part != null) Hint("The card behind your widgets and the stats card. The music card can follow it too (Music card → Card).")
+        Choice("Style", listOf("none" to "None", "glass" to "Glass", "solid" to "Solid", "outline" to "Outline"), s.cardStyle) { v ->
+            val (opacity, border) = CARD_DEFAULTS.getValue(v)
+            change { it.copy(cardStyle = v, cardOpacity = opacity, cardBorder = border) }
+        }
+        val noCard = s.cardStyle == "none"
+        Slide("See-through (0% = fully transparent)", s.cardOpacity.toFloat(), 0f..100f, 19, "%", enabled = !noCard) { v -> change { it.copy(cardOpacity = v.roundToInt()) } }
+        Slide("Corner rounding", s.cardRadius.toFloat(), 0f..36f, 35, "dp", enabled = !noCard) { v -> change { it.copy(cardRadius = v.roundToInt()) } }
+        Choice("Border", ON_OFF, s.cardBorder.onOff(), enabled = !noCard) { v -> change { it.copy(cardBorder = v == "on") } }
+        Choice("Widget size", listOf("full" to "Full", "compact" to "Compact"), s.cardSize) { v -> change { it.copy(cardSize = v) } }
+        Choice("Headings and rings", listOf("theme" to "Theme accent", "gold" to "Gold"), s.cardAccent) { v -> change { it.copy(cardAccent = v) } }
+        Choice("Today marker", COLOURS, s.cardToday) { v -> change { it.copy(cardToday = v) } }
+    }
+
+    if (show("spacing")) {
+        SectionLabel("Spacing and edge")
+        Slide("Clock to date", s.gap1.toFloat(), 0f..16f, 15, "dp") { v -> change { it.copy(gap1 = v.roundToInt()) } }
+        Slide("Date to the line", s.gap2.toFloat(), 0f..20f, 19, "dp") { v -> change { it.copy(gap2 = v.roundToInt()) } }
+        Slide("Line to the widget", s.gap3.toFloat(), 6f..32f, 25, "dp") { v -> change { it.copy(gap3 = v.roundToInt()) } }
+        Slide("Left edge (all four)", s.edge.toFloat(), 24f..64f, 39, "dp") { v -> change { it.copy(edge = v.roundToInt()) } }
+    }
+
+    if (show("touch")) {
+        SectionLabel("The Seelie touch")
+        Choice("Spirit, breathing colon and sparkle", ON_OFF, s.spirit.onOff()) { v -> change { it.copy(spirit = v == "on") } }
+    }
+    if (part != "touch" && store.isCustom) ResetChip("Reset to ${store.bundle.title}") { store.reset() }
 }
 
 private val COLOURS = listOf("white" to "White", "accent" to "Accent", "gold" to "Gold")
@@ -190,7 +211,8 @@ internal fun HomePreview(scale: Float = 0.7f) {
             .border(1.dp, look.accent.copy(alpha = 0.3f), shape)
             .padding(top = 12.dp, bottom = 10.dp, end = 12.dp)
     ) {
-        val hs = HomeStyleStore.get(LocalContext.current).style
+        val context = LocalContext.current
+        val hs = HomeStyleStore.get(context).style
         // Laid out at full size, then shrunk: the layout itself takes only the smaller space.
         Column(Modifier.layout { measurable, constraints ->
             val full = measurable.measure(constraints.copy(minWidth = 0, maxWidth = (constraints.maxWidth / scale).toInt()))
@@ -201,7 +223,10 @@ internal fun HomePreview(scale: Float = 0.7f) {
             // The edge inside the preview is the real one minus the screen's own margin, so it fits on this card.
             HomeTop(time = time, glance = glance, modifier = Modifier.padding(start = 0.dp))
             Spacer(Modifier.height((hs.gap3).dp))
-            WidgetStack(Modifier.padding(start = hs.edge.dp))
+            // A drawn copy, not the real stack: Android gives each app widget ONE live view, and a second one here
+            // would leave the widget on his home stale (review, 24 Oct).
+            val widgets = remember { WidgetStore.get(context) }
+            if (widgets.stack.isNotEmpty()) MiniWidgets(widgets, hs, Modifier.padding(start = hs.edge.dp))
         }
         Text(
             "LIVE PREVIEW",
@@ -413,8 +438,13 @@ private fun ResetChip(text: String, onClick: () -> Unit) {
  * and whether the A–Z letters follow it or use the accent.
  */
 @Composable
-internal fun TextColourSettings(looks: com.shamil.launcher.ui.theme.LookStore) {
+internal fun TextColourSettings(looks: com.shamil.launcher.ui.theme.LookStore, part: String? = null) {
     val look = LocalLauncherLook.current
+    // "rail" = only the A–Z letters' colour (it moved to A–Z rail → Style, 24 Oct); "text" = everything else.
+    if (part == "rail") {
+        Choice("A–Z letters", listOf("text" to "Same as text", "accent" to "Accent colour"), looks.railColour) { looks.useRailColour(it) }
+        return
+    }
     SectionLabel("Text colour")
     Row(Modifier.staggerIn().fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         // First: the theme's own text colour, then every colour he can pick.
@@ -469,5 +499,5 @@ internal fun TextColourSettings(looks: com.shamil.launcher.ui.theme.LookStore) {
             if (pair.size == 1) Spacer(Modifier.weight(1f))
         }
     }
-    Choice("A–Z letters", listOf("text" to "Same as text", "accent" to "Accent colour"), looks.railColour) { looks.useRailColour(it) }
+    if (part == null) Choice("A–Z letters", listOf("text" to "Same as text", "accent" to "Accent colour"), looks.railColour) { looks.useRailColour(it) }
 }

@@ -78,7 +78,7 @@ fun AppWidgetPage(appWidgetId: Int, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier.fillMaxSize().clip(RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
         if (info == null) {
             Text(
-                "This widget's app is gone. Remove it in Seelie settings → Home screen → Widget stack.",
+                "This widget's app is gone. Remove it in Seelie settings → Widgets → Stack.",
                 modifier = Modifier.padding(16.dp),
                 style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp),
             )

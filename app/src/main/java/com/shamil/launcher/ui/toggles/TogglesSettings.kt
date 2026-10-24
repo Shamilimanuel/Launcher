@@ -139,14 +139,14 @@ fun ColumnScope.TogglesSettingsContent() {
     Choice("When off", listOf("glass" to "Glass", "soft" to "Soft fill", "bare" to "Icon only"), s.offLook) { v ->
         prefs.change { it.copy(offLook = v) }
     }
-    Hint("\"Home style\" uses the same accent as your widget card (Look → Home style): the theme's colour or gold.")
+    Hint("\"Home style\" uses the same accent as your widget card (Widgets → Card): the theme's colour or gold.")
 
     SectionLabel("Behind the row")
     Choice("Backing", listOf("none" to "Nothing", "card" to "A card"), s.backing) { v -> prefs.change { it.copy(backing = v) } }
     Choice("\"Quick toggles\" heading", ON_OFF, s.cardLabel.onOff(), enabled = s.backing == "card") { v ->
         prefs.change { it.copy(cardLabel = v == "on") }
     }
-    Hint("The card matches your widget card: its style, see-through level, corners and border all follow Look → Home style.")
+    Hint("The card matches your widget card: its style, see-through level, corners and border all follow Widgets → Card.")
 
     SectionLabel("What each one really does")
     Hint(

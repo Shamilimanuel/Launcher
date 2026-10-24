@@ -59,7 +59,7 @@ fun ColumnScope.StatsSettingsContent() {
     val store = remember { StatsStore.get(context) }
     val st = store.style
 
-    Hint("Tap the line under the date on your home to open this card. Its look (card, see-through, corners) follows Look → Home style.")
+    Hint("Tap the line under the date on your home to open this card. Its look (card, see-through, corners) follows Widgets → Card, so it matches your widget card.")
 
     SectionLabel("Stats · in the order you pick them")
     StatKind.entries.chunked(2).forEach { pair ->

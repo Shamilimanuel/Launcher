@@ -111,8 +111,7 @@ fun ColumnScope.WidgetStackSettingsContent(onAddFromApp: () -> Unit = {}) {
     AddRow(R.drawable.ic_widgets, look.accent, "From an app…", "Any widget your apps offer, like on a normal home screen", onAddFromApp)
     store.notAdded.forEach { kind -> key(kind.id) { AddRow(kind.icon, kind.tint, kind.title, kind.about) { store.add(kind) } } }
 
-    SectionLabel("Card look")
-    Hint("How the widget card looks (no card, glass, solid or outline, how see-through, corners, border, compact) now lives in Look → Home style, so it always matches your clock and date.")
+    Hint("How the card behind your widgets looks (no card, glass, solid or outline, see-through, corners, border, compact) is on the Card tab.")
 }
 
 /** A widget from another app in his stack: its app's icon and name, ↑ ↓ ✕, and a Small / Medium / Large switch. */

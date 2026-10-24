@@ -2,6 +2,7 @@ package com.shamil.launcher.ui.home
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -156,9 +157,12 @@ class HomeLayoutStore private constructor(context: Context) {
     }
 }
 
-/** The layout to draw with (a preview could hand in another one later). */
+/** A layout to draw with instead of his own (the save previews show a save's layout without applying it). */
+val LocalHomeLayoutOverride = compositionLocalOf<HomeLayout?> { null }
+
+/** The layout to draw with: a preview's, or his saved one. */
 @Composable
-fun currentHomeLayout(): HomeLayout = HomeLayoutStore.get(LocalContext.current).layout
+fun currentHomeLayout(): HomeLayout = LocalHomeLayoutOverride.current ?: HomeLayoutStore.get(LocalContext.current).layout
 
 /** "left" / "centre" / "right" as a Compose alignment. */
 fun alignOf(a: String): Alignment.Horizontal = when (a) {

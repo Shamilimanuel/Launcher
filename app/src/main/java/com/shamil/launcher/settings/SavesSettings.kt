@@ -87,7 +87,7 @@ fun ColumnScope.SavesSettingsContent(
         }
     }
 
-    if (intro) Hint("Save your whole look (theme, font, text colours, icons, home style, clock, stats, music card and toggles) under a name. Give a save its own wallpaper, and switch between them in one tap.")
+    if (intro) Hint("Save your whole setup under a name, like swapping a whole desktop with one script: theme, fonts and colours, icons, home style, clock, layout, living background, music card, toggles, stats, the A–Z rail and the PIN look, plus its own home and lock wallpaper. Tap a save to see all of it before you switch.")
     CurrentLookCard(favourites, onPreview = { previewing = 0 }, onSave = { creating = true })
 
     if (intro) SectionLabel(if (store.saves.isEmpty()) "No saves yet" else "Your themes · ${store.saves.size}")

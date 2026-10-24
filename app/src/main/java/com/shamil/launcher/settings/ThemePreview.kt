@@ -1,19 +1,30 @@
 package com.shamil.launcher.settings
 
-import android.content.Context
-import android.graphics.BitmapFactory
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,14 +36,17 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -42,22 +56,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -65,37 +76,46 @@ import com.shamil.launcher.R
 import com.shamil.launcher.apps.AppCache
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.Favourites
-import com.shamil.launcher.ui.ROW_START
 import com.shamil.launcher.ui.clock.ClockStore
-import com.shamil.launcher.ui.clock.ClockStyle
-import com.shamil.launcher.ui.clock.LocalClockStyleOverride
-import com.shamil.launcher.ui.clock.rememberClockTime
-import com.shamil.launcher.ui.home.HomeBundle
-import com.shamil.launcher.ui.home.HomeStyle
+import com.shamil.launcher.ui.home.HomeLayoutStore
 import com.shamil.launcher.ui.home.HomeStyleStore
-import com.shamil.launcher.ui.home.HomeTop
-import com.shamil.launcher.ui.home.LocalHomeStyleOverride
-import com.shamil.launcher.ui.rememberGlanceState
-import com.shamil.launcher.ui.theme.LauncherLook
+import com.shamil.launcher.ui.home.StatsStore
+import com.shamil.launcher.ui.livebg.LiveBgStore
+import com.shamil.launcher.ui.media.MusicPrefs
+import com.shamil.launcher.ui.rail.RailSide
+import com.shamil.launcher.ui.rail.RailStore
+import com.shamil.launcher.ui.theme.Cinzel
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import com.shamil.launcher.ui.theme.LookStore
 import com.shamil.launcher.ui.theme.SavedLook
 import com.shamil.launcher.ui.theme.SavesStore
-import com.shamil.launcher.ui.theme.WallpaperTheme
 import com.shamil.launcher.ui.theme.WallpaperStore
-import com.shamil.launcher.ui.theme.themeById
+import com.shamil.launcher.ui.toggles.TogglePrefs
+import com.shamil.launcher.ui.vault.PinLookStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 /*
- * Theme previews, like Niagara's (his ask, 23 Oct): each theme drawn as a little phone with the REAL home parts
- * (his clock face, date look, glance line, app rows and the A–Z) in that theme's styles, without applying it.
- * The first page is what he has right now; swipe sideways for his saved themes.
+ * Theme previews, like Niagara's (his ask, 23 Oct), made complete on 24 Oct ("it needs everything"): each save as a
+ * phone with every part it holds (see SavePreview.kt / SavePhone.kt), without applying it. The first page is what he
+ * has right now; swipe sideways for his saves. Both mockup variants he kept, as one screen:
+ *  - under the phone, "What's in this save": one chip per part; tapping one dims the rest and lights that part up
+ *    (Fonts & colours shows a type card, PIN look turns the phone over to the vault);
+ *  - "Explode": the phone's layers float apart in 3D, each can be hidden, and a receipt lists every value in the save.
  */
 
-/** What a preview needs to draw a look: its colours/font, home style and clock face. */
-private class PreviewLook(val look: LauncherLook, val home: HomeStyle, val clock: ClockStyle)
+/** The chips under the phone: (part, title, icon). */
+private val CHIPS = listOf(
+    Triple("wall", "Wallpaper", R.drawable.ic_wallpaper),
+    Triple("live", "Living background", R.drawable.ic_partly_cloudy_night),
+    Triple("clock", "Clock, date & glance", R.drawable.ic_schedule),
+    Triple("widgets", "Widgets", R.drawable.ic_widgets),
+    Triple("music", "Music card", R.drawable.ic_music_note),
+    Triple("favs", "Favourites", R.drawable.ic_list),
+    Triple("rail", "A–Z rail", R.drawable.ic_apps),
+    Triple("type", "Fonts & colours", R.drawable.ic_text_fields),
+    Triple("pin", "PIN look", R.drawable.ic_lock),
+)
 
 /** The full-screen preview. Page 0 = his current look, then his saves; starts at [startPage]. */
 @Composable
@@ -107,15 +127,48 @@ fun ThemePreviewDialog(
     onSaveCurrent: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val context = LocalContext.current
     val look = LocalLauncherLook.current
+    val store = remember { SavesStore.get(context) }
+    val wallpapers = remember { WallpaperStore.get(context) }
     val pageCount = saves.size + 1
     val pager = rememberPagerState(initialPage = startPage.coerceIn(0, pageCount - 1)) { pageCount }
     val favourites = rememberFavouriteApps()
     var confirmDelete by remember { mutableStateOf<SavedLook?>(null) }
-    val save = saves.getOrNull(pager.currentPage - 1)   // null = the current look
+    val page = pager.currentPage.coerceIn(0, pageCount - 1)
+    val save = saves.getOrNull(page - 1)   // null = the current look
+
+    // Every page, read once: his settings right now ("Current look", and the parts an older save doesn't hold), then each save.
+    val now = remember(saves) { store.currentSnapshot() }
+    val allParts = remember(saves, now) { listOf(readSaveParts(context, now, now)) + saves.map { readSaveParts(context, it.snapshot, now) } }
+    val allWalls = remember(saves, wallpapers.version) {
+        listOf(WallInfo(home = wallpapers.copyFile() != null, lock = wallpapers.lockCopyFile() != null, current = true)) +
+            saves.map { WallInfo(home = store.hasWallpaper(it), lock = store.lockWallpaperFile(it).exists(), current = false) }
+    }
+    val parts = allParts.getOrElse(page) { allParts.last() }
+    val wall = allWalls.getOrElse(page) { allWalls.last() }
+
+    // Variant 1: the chip he tapped. Variant 2: Explode, its hidden layers.
+    var focus by remember { mutableStateOf<String?>(null) }
+    var exploded by remember { mutableStateOf(false) }
+    var hidden by remember { mutableStateOf(emptySet<String>()) }
+    val explode = remember { Animatable(0f) }
+    // Stays true until the layers have settled back, so the rounded clip only returns once they're home.
+    var loose by remember { mutableStateOf(false) }
+    LaunchedEffect(exploded) {
+        if (exploded) loose = true
+        explode.animateTo(if (exploded) 1f else 0f, tween(900, easing = FastOutSlowInEasing))
+        if (!exploded) loose = false
+    }
+    LaunchedEffect(page) { focus = null }
+    // The screen's own accent glides to each save's colour as he swipes (his 0.4 s colour glide).
+    val accent by animateColorAsState(parts.look.accent, tween(400), label = "save accent")
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        CompositionLocalProvider(LocalStagger provides remember { Stagger() }) {
         Box(Modifier.fillMaxSize().background(Color(0xF0101218))) {
+            // A few seelie sparkles drifting behind it all, in their own layer so they never redraw the phones.
+            Box(Modifier.fillMaxSize().graphicsLayer().sparkles(accent.copy(alpha = 0.5f), count = 12))
             Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     // ← back, like Niagara.
@@ -124,36 +177,104 @@ fun ThemePreviewDialog(
                     // 🗑 quick delete of the theme he's looking at (not for "Current look").
                     if (save != null) RoundIcon(R.drawable.ic_delete, "Delete theme", filled = false) { confirmDelete = save }
                 }
-                // The phones: the next one peeks in at the side.
-                HorizontalPager(
-                    state = pager,
-                    modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 10.dp),
-                    contentPadding = PaddingValues(horizontal = 46.dp),
-                    pageSpacing = 16.dp,
-                ) { page ->
-                    val pageSave = saves.getOrNull(page - 1)
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxHeight()) {
-                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            if (pageSave == null) CurrentLookPhone(favourites) else SavedLookPhone(pageSave, favourites)
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val phoneHeight = (maxHeight * 0.7f).coerceAtLeast(300.dp)
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        // The phones: the next one peeks in at the side.
+                        HorizontalPager(
+                            state = pager,
+                            modifier = Modifier.fillMaxWidth().height(phoneHeight),
+                            contentPadding = PaddingValues(horizontal = 46.dp),
+                            pageSpacing = 16.dp,
+                        ) { p ->
+                            val front = p == pager.currentPage
+                            PreviewPage(
+                                parts = allParts.getOrElse(p) { allParts.last() },
+                                save = saves.getOrNull(p - 1),
+                                wall = allWalls.getOrElse(p) { allWalls.last() },
+                                favourites = favourites,
+                                show = if (!front) PhoneShow() else PhoneShow(
+                                    live = true,
+                                    explode = { explode.value },
+                                    loose = loose,
+                                    focus = focus,
+                                    hidden = if (loose) hidden else emptySet(),
+                                    pinFace = focus == "pin" && !loose,
+                                ),
+                                accent = accent,
+                            )
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text(pageSave?.name ?: "Current look",
-                            style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = Color.White, fontSize = 16.sp))
+                        PageTitle(save?.name ?: "Current look", parts, wall, pageCount, page, accent)
+                        if (!exploded) {
+                            Column(Modifier.padding(horizontal = 18.dp)) { SectionLabel("What's in this save") }
+                            // Fresh stagger per save, so the chips float in again each time he lands on one.
+                            CompositionLocalProvider(LocalStagger provides remember(page) { Stagger() }) {
+                                val details = remember(parts, wall) { partDetails(parts, wall) }
+                                Row(
+                                    Modifier.horizontalScroll(rememberScrollState()).height(IntrinsicSize.Max).padding(horizontal = 18.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    CHIPS.forEach { (key, title, icon) ->
+                                        PartChip(title, icon, details[key].orEmpty(), selected = focus == key, accent = accent,
+                                            swatches = if (key == "type") parts.swatches() else null) {
+                                            focus = if (focus == key) null else key
+                                        }
+                                    }
+                                }
+                            }
+                            Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp)) {
+                                Hint("Tap a part to light it up on the phone. Your widget stack, your favourite apps and the vault's fun lock aren't part of a save: those always stay yours.")
+                            }
+                        } else {
+                            Column(Modifier.padding(horizontal = 18.dp)) { SectionLabel("Layers · tap to hide") }
+                            Row(
+                                Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 18.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                SAVE_LAYERS.forEach { (key, name) ->
+                                    LayerChip(name, visible = key !in hidden, accent = accent) { hidden = if (key in hidden) hidden - key else hidden + key }
+                                }
+                            }
+                            Column(Modifier.padding(horizontal = 18.dp)) {
+                                SectionLabel("The receipt · everything in this save")
+                                Receipt(remember(parts, wall) { receiptRows(parts, wall) }, parts.swatches(), accent)
+                                Spacer(Modifier.height(14.dp))
+                            }
+                        }
                     }
                 }
-                // ✓ Apply theme (or, on "Current look", save it as a theme).
-                val press = remember { MutableInteractionSource() }
                 Row(
-                    Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp).pressFeel(press, look.accent, 24.dp).clip(RoundedCornerShape(24.dp))
-                        .background(look.accent.copy(alpha = 0.9f))
-                        .clickable(press, null) { if (save != null) onApply(save) else onSaveCurrent() }
-                        .padding(horizontal = 30.dp, vertical = 16.dp),
+                    Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(if (save != null) "✓" else "+", style = TextStyle(color = look.sheet.copy(alpha = 1f), fontSize = 20.sp, fontWeight = FontWeight.Bold))
-                    Spacer(Modifier.width(12.dp))
-                    Text(if (save != null) "Apply theme" else "Save as a theme",
-                        style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.sheet.copy(alpha = 1f), fontSize = 18.sp))
+                    // ✦ Explode: the layers float apart (and back together).
+                    val pressX = remember { MutableInteractionSource() }
+                    Text(
+                        if (exploded) "Put it back together" else "✦ Explode",
+                        modifier = Modifier.pressFeel(pressX, accent, 24.dp).clip(RoundedCornerShape(24.dp))
+                            .border(1.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(24.dp))
+                            .background(if (exploded) accent.copy(alpha = 0.16f) else Color.Transparent)
+                            .clickable(pressX, null) { exploded = !exploded; focus = null }
+                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                        maxLines = 1,
+                        style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = accent, fontSize = 15.sp),
+                    )
+                    // ✓ Apply theme (or, on "Current look", save it as a theme).
+                    val press = remember { MutableInteractionSource() }
+                    Row(
+                        Modifier.weight(1f).pressFeel(press, accent, 24.dp).clip(RoundedCornerShape(24.dp))
+                            .background(accent.copy(alpha = 0.9f))
+                            .clickable(press, null) { if (save != null) onApply(save) else onSaveCurrent() }
+                            .padding(horizontal = 20.dp, vertical = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Text(if (save != null) "✓" else "+", style = TextStyle(color = look.sheet.copy(alpha = 1f), fontSize = 20.sp, fontWeight = FontWeight.Bold))
+                        Spacer(Modifier.width(10.dp))
+                        Text(if (save != null) "Apply theme" else "Save as a theme", maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.sheet.copy(alpha = 1f), fontSize = 17.sp))
+                    }
                 }
             }
             confirmDelete?.let { s ->
@@ -167,6 +288,162 @@ fun ThemePreviewDialog(
                 )
             }
         }
+        }
+    }
+}
+
+/** One page of the pager: the phone, plus the type card (Fonts & colours) or the lock screen picture (Wallpaper). */
+@Composable
+private fun PreviewPage(parts: SaveParts, save: SavedLook?, wall: WallInfo, favourites: List<AppEntry>, show: PhoneShow, accent: Color) {
+    val context = LocalContext.current
+    val store = remember { SavesStore.get(context) }
+    val wallpapers = remember { WallpaperStore.get(context) }
+    val width = context.resources.displayMetrics.widthPixels / 2
+    // The save's own pictures (or Seelie's copy of his wallpaper), decoded at preview size off the main thread.
+    val home by produceState<ImageBitmap?>(null, save?.id, store.saves, wallpapers.version) {
+        value = decodePreview(if (save == null) wallpapers.copyFile() else store.wallpaperFile(save), width)
+    }
+    val showLock = show.focus == "wall" && wall.lock
+    val lock by produceState<ImageBitmap?>(null, showLock, save?.id) {
+        value = if (!showLock) null else decodePreview(if (save == null) wallpapers.lockCopyFile() else store.lockWallpaperFile(save), 240)
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        SavePhone(parts, PhoneWalls(home), favourites, show = show)
+        AnimatedVisibility(
+            visible = show.focus == "type",
+            enter = fadeIn(tween(300)) + scaleIn(tween(300), initialScale = 0.92f),
+            exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.96f),
+        ) { TypeCard(parts, accent) }
+        // The save's lock screen picture, beside the phone while Wallpaper is lit.
+        lock?.let { picture ->
+            Column(Modifier.align(Alignment.BottomStart).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Image(picture, "Lock screen picture", contentScale = ContentScale.Crop,
+                    modifier = Modifier.width(62.dp).height(128.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(10.dp)))
+                Text("LOCK SCREEN", modifier = Modifier.padding(top = 4.dp),
+                    style = TextStyle(fontWeight = FontWeight.ExtraBold, fontSize = 9.5.sp, letterSpacing = 0.12.em, color = accent))
+            }
+        }
+    }
+}
+
+/** The save's name in Cinzel, what it is in a few words, and a dot per page. */
+@Composable
+private fun PageTitle(name: String, parts: SaveParts, wall: WallInfo, pageCount: Int, page: Int, accent: Color) {
+    val look = LocalLauncherLook.current
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center,
+            style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, color = accent, fontSize = 20.sp, letterSpacing = 0.04.em))
+        Text(
+            parts.themeName + when { wall.home && wall.lock -> " · home + lock wallpaper"; wall.home -> " · with wallpaper"; else -> " · theme colours" },
+            style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp),
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            repeat(pageCount) { i ->
+                val w by animateDpAsState(if (i == page) 18.dp else 6.dp, tween(300), label = "dot")
+                Box(Modifier.height(6.dp).width(w).clip(CircleShape).background(if (i == page) accent else Color.White.copy(alpha = 0.25f)))
+            }
+        }
+    }
+}
+
+/** One "What's in this save" chip: the part, what the save says about it, and (for fonts) its colours. */
+@Composable
+private fun PartChip(title: String, icon: Int, text: String, selected: Boolean, accent: Color, swatches: List<Color>?, onClick: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val press = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(14.dp)
+    val edge by animateColorAsState(if (selected) accent else Color.White.copy(alpha = 0.12f), tween(400), label = "chip edge")
+    val glow by animateFloatAsState(if (selected) 1f else 0f, tween(400), label = "chip glow")
+    Column(
+        Modifier
+            .staggerIn()
+            .width(176.dp)
+            .fillMaxHeight()
+            .pressFeel(press, accent, 14.dp)
+            .drawBehind { if (glow > 0f) drawRoundRect(accent.copy(alpha = 0.18f * glow), cornerRadius = CornerRadius(14.dp.toPx())) }
+            .clip(shape)
+            .background(look.card)
+            .border(1.dp, edge, shape)
+            .clickable(press, null, onClick = onClick)
+            .padding(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(icon), null, tint = accent, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(title.uppercase(), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 0.06.em, color = accent))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(text, maxLines = 6, overflow = TextOverflow.Ellipsis,
+            style = TextStyle(fontFamily = look.font, fontSize = 12.5.sp, lineHeight = 16.sp, color = look.text))
+        swatches?.let { Swatches(it, 14.dp, Modifier.padding(top = 8.dp)) }
+    }
+}
+
+/** A layer switch in Explode: the eye open (shown) or shut (hidden). */
+@Composable
+private fun LayerChip(name: String, visible: Boolean, accent: Color, onClick: () -> Unit) {
+    val look = LocalLauncherLook.current
+    val press = remember { MutableInteractionSource() }
+    val edge by animateColorAsState(if (visible) accent.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.14f), tween(400), label = "layer edge")
+    Row(
+        Modifier.staggerIn().pressFeel(press, accent, 18.dp).clip(CircleShape).border(1.dp, edge, CircleShape)
+            .background(if (visible) accent.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable(press, null, onClick = onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(if (visible) R.drawable.ic_visibility else R.drawable.ic_visibility_off), null,
+            tint = if (visible) accent else look.textDim, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(name, style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = if (visible) look.text else look.textDim))
+    }
+}
+
+/** The receipt: every value in the save, one row each, gold labels on the left. */
+@Composable
+private fun Receipt(rows: List<Pair<String, String>>, swatches: List<Color>, accent: Color) {
+    val look = LocalLauncherLook.current
+    val shape = RoundedCornerShape(16.dp)
+    Column(Modifier.staggerIn().fillMaxWidth().clip(shape).background(look.card).border(1.dp, Color.White.copy(alpha = 0.08f), shape).padding(horizontal = 14.dp, vertical = 4.dp)) {
+        rows.forEachIndexed { i, (what, value) ->
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(accent.copy(alpha = 0.16f)))
+            Row(Modifier.padding(vertical = 8.dp)) {
+                Text(what.uppercase(), modifier = Modifier.width(104.dp).padding(top = 1.dp, end = 8.dp),
+                    style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.ExtraBold, fontSize = 10.5.sp, letterSpacing = 0.08.em, color = accent))
+                Column(Modifier.weight(1f)) {
+                    Text(value, style = TextStyle(fontFamily = look.font, fontSize = 13.sp, lineHeight = 18.sp, color = look.text))
+                    if (what == "Fonts & colours") Swatches(swatches, 13.dp, Modifier.padding(top = 6.dp))
+                }
+            }
+        }
+    }
+}
+
+/** "Fonts & colours" lit up: the save's font big, its names, and its colours. */
+@Composable
+private fun TypeCard(parts: SaveParts, accent: Color) {
+    val shape = RoundedCornerShape(22.dp)
+    val l = parts.look
+    Column(
+        Modifier.padding(horizontal = 18.dp).clip(shape).background(Color(0xF20E1224)).border(1.dp, accent.copy(alpha = 0.5f), shape).padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("Aa Bb 123", style = TextStyle(fontFamily = l.font, fontSize = 34.sp, color = l.text))
+        Text("${parts.fontName} · text ${parts.textColourName.lowercase()}", textAlign = TextAlign.Center,
+            style = TextStyle(fontFamily = l.font, fontSize = 13.sp, color = l.textDim))
+        Spacer(Modifier.height(12.dp))
+        Swatches(parts.swatches(), 26.dp)
+        Spacer(Modifier.height(10.dp))
+        Text("${parts.clock.label} clock · ${parts.bundle.title} home style", textAlign = TextAlign.Center,
+            style = TextStyle(fontFamily = l.font, fontSize = 12.sp, color = l.textDim))
+    }
+}
+
+@Composable
+private fun Swatches(colours: List<Color>, side: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(side / 3)) {
+        colours.forEach { c -> Box(Modifier.size(side).clip(CircleShape).background(c).border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)) }
     }
 }
 
@@ -196,131 +473,43 @@ internal fun rememberFavouriteApps(): List<AppEntry> {
     return apps
 }
 
-/** His look right now, as a phone. */
+/**
+ * His look right now, read the same way as a save. Reading every store's state here keeps the card live: change
+ * something in settings and the little phone follows at once.
+ */
+@Composable
+private fun rememberCurrentParts(): SaveParts {
+    val context = LocalContext.current
+    val keys = listOf<Any?>(
+        LookStore.get(context).look, LookStore.get(context).iconPack, HomeStyleStore.get(context).style,
+        remember { ClockStore.get(context) }.clockStyle, HomeLayoutStore.get(context).layout, LiveBgStore.get(context).style,
+        MusicPrefs.get(context).style, TogglePrefs.get(context).setup, StatsStore.get(context).style,
+        RailStore.get(context).style, RailSide.left, PinLookStore.get(context).look,
+    )
+    return remember(keys) {
+        val now = SavesStore.get(context).currentSnapshot()
+        readSaveParts(context, now, now)
+    }
+}
+
+/** His look right now, as a phone (a still picture: the living background shows one frame). */
 @Composable
 internal fun CurrentLookPhone(favourites: List<AppEntry>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val p = PreviewLook(
-        LookStore.get(context).look,
-        HomeStyleStore.get(context).style,
-        remember { ClockStore.get(context) }.clockStyle,
-    )
+    val parts = rememberCurrentParts()
     // The wallpaper he picked through Seelie, if any (Android won't let us read it otherwise).
     val store = remember { WallpaperStore.get(context) }
-    val wallpaper by produceState<ImageBitmap?>(null, store.version) {
-        value = withContext(Dispatchers.IO) {
-            runCatching { store.copyFile()?.let { BitmapFactory.decodeFile(it.path, BitmapFactory.Options().apply { inSampleSize = 2 })?.asImageBitmap() } }.getOrNull()
-        }
-    }
-    PhonePreview(p, wallpaper, favourites, modifier)
+    val wallpaper by produceState<ImageBitmap?>(null, store.version) { value = decodePreview(store.copyFile(), 240) }
+    SavePhone(parts, PhoneWalls(wallpaper), favourites, modifier)
 }
 
-/** A saved theme as a phone, with its own wallpaper picture if it has one. */
+/** A saved theme as a phone, with its own wallpaper picture if it has one. [small] = a card thumbnail (still picture). */
 @Composable
 internal fun SavedLookPhone(save: SavedLook, favourites: List<AppEntry>, modifier: Modifier = Modifier, small: Boolean = false) {
     val context = LocalContext.current
     val store = remember { SavesStore.get(context) }
-    val p = remember(save.id, save.snapshot.toString(), LookStore.get(context).wallpaperLook) { readSave(context, save.snapshot) }
-    val wallpaper by produceState<ImageBitmap?>(null, save.id, store.saves) {
-        value = withContext(Dispatchers.IO) {
-            runCatching {
-                val f = store.wallpaperFile(save)
-                if (!f.exists()) null
-                else BitmapFactory.decodeFile(f.path, BitmapFactory.Options().apply { inSampleSize = if (small) 8 else 2 })?.asImageBitmap()
-            }.getOrNull()
-        }
-    }
-    PhonePreview(p, wallpaper, favourites, modifier)
-}
-
-/**
- * The phone: the home laid out at the real screen size, then shrunk to fit (so the proportions are exactly the home's).
- * Without a wallpaper picture it shows the theme's colours (newer Android doesn't let Seelie read the wallpaper itself).
- */
-@Composable
-private fun PhonePreview(p: PreviewLook, wallpaper: ImageBitmap?, favourites: List<AppEntry>, modifier: Modifier) {
-    val metrics = LocalContext.current.resources.displayMetrics
-    val density = LocalDensity.current
-    val screenW = with(density) { metrics.widthPixels.toDp() }
-    val screenH = with(density) { metrics.heightPixels.toDp() }
-    val shape = RoundedCornerShape(24.dp)
-    val look = p.look
-    val time = rememberClockTime()
-    val glance = rememberGlanceState()
-    BoxWithConstraints(
-        modifier
-            .fillMaxHeight()
-            .aspectRatio(screenW / screenH)
-            .clip(shape)
-            .background(Brush.verticalGradient(listOf(look.sheetTop.copy(alpha = 1f), look.sheet.copy(alpha = 1f))))
-            .drawBehind {
-                if (wallpaper == null) drawCircle(
-                    Brush.radialGradient(listOf(look.accent.copy(alpha = 0.35f), Color.Transparent), center = Offset(size.width * 0.3f, 0f), radius = size.width),
-                    radius = size.width, center = Offset(size.width * 0.3f, 0f),
-                )
-            }
-            .border(1.dp, Color.White.copy(alpha = 0.12f), shape)
-    ) {
-        wallpaper?.let { Image(it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-        val scale = maxWidth / screenW
-        CompositionLocalProvider(
-            LocalLauncherLook provides look,
-            LocalHomeStyleOverride provides p.home,
-            LocalClockStyleOverride provides p.clock,
-        ) {
-            Box(
-                Modifier.layout { measurable, constraints ->
-                    val full = measurable.measure(Constraints.fixed(screenW.roundToPx(), screenH.roundToPx()))
-                    layout(constraints.maxWidth, constraints.maxHeight) {
-                        full.placeWithLayer(0, 0) { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f) }
-                    }
-                }
-            ) {
-                Column(Modifier.fillMaxSize().padding(end = 56.dp)) {
-                    Spacer(Modifier.height(screenH * 0.105f))
-                    HomeTop(time = time, glance = glance)
-                    Spacer(Modifier.height(12.dp + p.home.gap3.dp))
-                    CompositionLocalProvider(LocalLauncherLook provides look.forPart("apps")) {
-                        val rowLook = LocalLauncherLook.current
-                        favourites.take(10).forEach { app ->
-                            Row(Modifier.fillMaxWidth().height(56.dp).padding(start = ROW_START), verticalAlignment = Alignment.CenterVertically) {
-                                Image(app.icon, contentDescription = null, modifier = Modifier.size(44.dp * rowLook.iconScale))
-                                Spacer(Modifier.width(20.dp))
-                                Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    style = TextStyle(fontFamily = rowLook.font, color = rowLook.text, fontSize = 17.sp, shadow = rowLook.shadow))
-                            }
-                        }
-                    }
-                }
-                // The A–Z rail on the right, in the theme's rail colour.
-                Column(Modifier.align(Alignment.CenterEnd).padding(end = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    ("☆" + ('A'..'Z').joinToString("") + "•").forEach { c ->
-                        Text(c.toString(), style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.rail,
-                            fontSize = 12.sp, lineHeight = 19.sp, shadow = look.shadow))
-                    }
-                }
-            }
-        }
-        // Taps on the little phone do nothing (it's a picture); swipes still reach the pager.
-        Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) {})
-    }
-}
-
-/** The look, home style and clock face a save describes, read from its snapshot (without applying it). */
-private fun readSave(context: Context, snapshot: JSONObject): PreviewLook {
-    fun entry(file: String, key: String) = snapshot.optJSONObject(file)?.optJSONObject(key)
-    fun str(file: String, key: String): String? = entry(file, key)?.optString("v")?.takeIf { it.isNotEmpty() }
-    fun set(file: String, key: String): Set<String>? = entry(file, key)?.optJSONArray("v")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
-    val themeId = str("look", "theme")
-    val theme = if (themeId == WallpaperTheme.ID) LookStore.get(context).wallpaperLook ?: themeById(null) else themeById(themeId)
-    val look = LookStore.build(
-        theme = theme,
-        fontId = str("look", "font"),
-        iconScale = entry("look", "icon_scale")?.optDouble("v")?.toFloat()?.takeIf { !it.isNaN() } ?: 1f,
-        textColour = str("look", "text_colour"),
-        colourParts = set("look", "colour_parts") ?: LookStore.COLOUR_PARTS.map { it.first }.toSet(),
-        railColour = str("look", "rail_colour") ?: "text",
-    )
-    val bundle = HomeBundle.byId(str("home_style", "bundle"))
-    return PreviewLook(look, HomeStyle.fromJson(str("home_style", "style"), bundle.style), ClockStyle.byId(str("clock", "clock_style")))
+    val parts = remember(save.id, save.snapshot.toString(), LookStore.get(context).wallpaperLook) { readSaveParts(context, save.snapshot) }
+    val width = if (small) 240 else context.resources.displayMetrics.widthPixels / 2
+    val wallpaper by produceState<ImageBitmap?>(null, save.id, store.saves) { value = decodePreview(store.wallpaperFile(save), width) }
+    SavePhone(parts, PhoneWalls(wallpaper), favourites, modifier, PhoneShow(live = !small))
 }
