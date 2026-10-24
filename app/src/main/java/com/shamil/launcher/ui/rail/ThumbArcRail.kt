@@ -165,7 +165,7 @@ private fun DrawScope.drawThumbArc(
         withTransform({ translate(q.x, q.y); scale(grow, grow, Offset.Zero) }) {
             val glow = (pull * 0.95f).coerceIn(0f, 1f)
             if (glow > 0.02f) drawCircle(p.halo, radius = 16f * s, center = Offset.Zero, alpha = glow)
-            drawText(tl, color = colour, topLeft = Offset(-tl.size.width / 2f, -tl.size.height / 2f), alpha = act.coerceIn(0f, 1f))
+            railText(tl, color = colour, topLeft = Offset(-tl.size.width / 2f, -tl.size.height / 2f), alpha = act.coerceIn(0f, 1f))
         }
     }
     // The letter bubble, further out from the bulge (kept on the screen).
@@ -177,7 +177,7 @@ private fun DrawScope.drawThumbArc(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         drawCircle(THUMB_GOLD.copy(alpha = act), radius = r, center = q, style = p.bubbleRing)
         val tl = bubbles[idx]
-        drawText(tl, color = THUMB_LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = THUMB_LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
 }
 

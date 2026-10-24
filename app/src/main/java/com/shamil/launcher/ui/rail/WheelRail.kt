@@ -406,7 +406,7 @@ private fun DrawScope.drawWheel(
             val tl = letters[j]
             withTransform({ translate(x, y); scale(grow, grow, Offset.Zero) }) {
                 if (glow > 0.01f) drawCircle(p.halo, radius = 18f * s, center = Offset.Zero, alpha = glow)
-                drawText(
+                railText(
                     tl, color = if (j == st.active) accent else railColour,
                     topLeft = Offset(-tl.size.width / 2f, -tl.size.height / 2f), alpha = alpha,
                 )
@@ -429,11 +429,11 @@ private fun DrawScope.drawWheel(
     drawCircle(WHEEL_GOLD.copy(alpha = openA), radius = br, center = c, style = p.bubbleRing)
     val tl = bubbles[st.shown.coerceIn(0, WHEEL_COUNT - 1)]
     withTransform({ scale(1.5f, 1.5f, c) }) {
-        drawText(tl, color = WHEEL_LIGHT, topLeft = Offset(st.cx - tl.size.width / 2f, st.cy - tl.size.height / 2f), alpha = openA)
+        railText(tl, color = WHEEL_LIGHT, topLeft = Offset(st.cx - tl.size.width / 2f, st.cy - tl.size.height / 2f), alpha = openA)
     }
     // The caption under the dial.
     val cap = p.captions[if (st.gem >= 0) st.gem + 1 else 0]
-    drawText(
+    railText(
         cap, color = WHEEL_CAPTION,
         topLeft = Offset(st.cx - cap.size.width / 2f, st.cy + st.radius + 34f * s - cap.size.height / 2f), alpha = 0.9f * openA,
     )

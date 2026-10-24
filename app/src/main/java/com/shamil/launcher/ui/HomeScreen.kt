@@ -7,6 +7,8 @@ import com.shamil.launcher.ui.rail.ConstellationRail
 import com.shamil.launcher.ui.rail.PetalFanRail
 import com.shamil.launcher.ui.rail.SeelieGuideRail
 import com.shamil.launcher.ui.rail.ThumbArcLayer
+import com.shamil.launcher.ui.rail.RailSide
+import com.shamil.launcher.ui.rail.railMirror
 import com.shamil.launcher.ui.rail.rememberArcRailState
 import com.shamil.launcher.ui.rail.arcRailInput
 import com.shamil.launcher.ui.rail.RailStyle
@@ -200,6 +202,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         }
     }
     val lettersWithApps = remember(listedApps) { listedApps.map { it.letter }.toSet() }
+    // Room for the A–Z rail on its side (left-hand mode puts it on the left).
+    val railStart = if (RailSide.left) 44.dp else 0.dp
+    val railEnd = if (RailSide.left) 12.dp else 56.dp
     // Each letter's apps, for the rail styles that show them by the thumb (Petal fan, Constellation).
     val appsByLetter = remember(listedApps) { listedApps.groupBy { it.letter } }
     // "Suggested" in Edit favourites: the apps he opened most in the last 2 weeks that aren't favourites yet;
@@ -359,20 +364,20 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                                 if (!isDefault) MakeDefaultButton(Modifier.padding(start = 38.dp))
                                 Spacer(Modifier.height(12.dp))
                                 // The stats card sits under the top and scrolls with it, so apps can't slide up behind it.
-                                GlanceCard(glance, Modifier.padding(start = 48.dp, end = 56.dp))
+                                GlanceCard(glance, Modifier.padding(start = 48.dp + railStart, end = railEnd))
                             }
                             // The widget stack: swipe sideways for the next widget; it scrolls away with the rest.
                             // Widgets and the music card in his "Widgets" text colour (Look → Fonts → Colour these).
                             BLOCK_WIDGETS -> if (layout.widgets) {
                                 CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("widgets")) {
-                                    WidgetStack(Modifier.padding(start = homeStyle.edge.dp, end = 56.dp, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
+                                    WidgetStack(Modifier.padding(start = homeStyle.edge.dp + railStart, end = railEnd, top = (homeStyle.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
                                 }
                             }
                             // The music card (Home screen → Music card; it hides itself when it's off).
                             BLOCK_MUSIC -> CompositionLocalProvider(LocalLauncherLook provides LocalLauncherLook.current.forPart("widgets")) {
-                                MusicCard(Modifier.padding(start = homeStyle.edge.dp, end = 56.dp, bottom = 8.dp))
+                                MusicCard(Modifier.padding(start = homeStyle.edge.dp + railStart, end = railEnd, bottom = 8.dp))
                             }
-                            BLOCK_FAVS -> if (layout.favs) Column(Modifier.padding(end = 56.dp)) {
+                            BLOCK_FAVS -> if (layout.favs) Column(Modifier.padding(start = railStart, end = railEnd)) {
                                 // The quick toggles row sits between his favourites, after as many as he chose (Home screen → Quick toggles).
                                 val toggleSlot = remember { TogglePrefs.get(context) }.rowSlot(favouriteApps.size)
                                 // His favourites in his "App names" text colour, and his icon style (Layout: normal, small, text only).
@@ -427,9 +432,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(if (RailSide.left) Alignment.BottomStart else Alignment.BottomEnd)
                 .navigationBarsPadding()
-                .padding(end = 58.dp, bottom = 36.dp),
+                .padding(start = if (RailSide.left) 58.dp else 0.dp, end = if (RailSide.left) 0.dp else 58.dp, bottom = 36.dp),
         ) {
             SearchButton(onClick = { state.searching = true })
         }
@@ -480,17 +485,19 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         if (!state.searching && !state.editingFavourites && !vaultOpen) {
             // The arc styles draw over the whole home (their touch lives on the home's root, see arcRailInput).
             when (railStyle) {
-                RailStyle.ARC_GUIDE -> ArcRailLayer(arcRail, lettersWithApps)
-                RailStyle.THUMB_ARC -> ThumbArcLayer(arcRail, lettersWithApps)
+                RailStyle.ARC_GUIDE -> ArcRailLayer(arcRail, lettersWithApps, Modifier.railMirror())
+                RailStyle.THUMB_ARC -> ThumbArcLayer(arcRail, lettersWithApps, Modifier.railMirror())
                 else -> {}
             }
             // The edge styles: all in the same strip on the right edge, with the same callbacks as the Niagara wave.
             val railBox = Modifier
-                .align(Alignment.TopEnd)
+                .align(if (RailSide.left) Alignment.TopStart else Alignment.TopEnd)
                 .padding(top = screenH * 0.27f)
                 .height(screenH * 0.64f)
                 // The touch strip runs to the screen edge; letters sit 32dp in, like his Niagara.
                 .width(46.dp)
+                // Left-hand mode: the same rail, mirrored onto the left edge.
+                .railMirror()
             val onRailSlide: (Float?) -> Unit = { slideY = it }
             val onRailRelease: (Boolean) -> Unit = { slid ->
                 // Let go on a lit-up app after sliding off the letters: open it (Niagara can't do this).

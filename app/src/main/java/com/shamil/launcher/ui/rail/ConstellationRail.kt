@@ -580,7 +580,7 @@ private fun DrawScope.drawConstellation(
                     cornerRadius = CornerRadius((label.size.height + 4f * s) / 2f), alpha = hv * shA,
                 )
             }
-            drawText(label, topLeft = Offset(x, y), alpha = (u * shA).coerceIn(0f, 1f), shadow = shadow)
+            railText(label, topLeft = Offset(x, y), alpha = (u * shA).coerceIn(0f, 1f), shadow = shadow)
         }
     }
     // The stars: a four-pointed glint behind each letter; the one under the thumb lights up and steps out.
@@ -604,9 +604,9 @@ private fun DrawScope.drawConstellation(
             if (v > 0.02f) {
                 val g = v * 0.85f
                 translate(q.x, q.y) { drawCircle(glowBrush, radius = 16f * s, center = Offset.Zero, alpha = g) }
-                drawText(tl, color = GLOW_TEXT, topLeft = topLeft, alpha = g.coerceIn(0f, 1f), shadow = glowShadow)
+                railText(tl, color = GLOW_TEXT, topLeft = topLeft, alpha = g.coerceIn(0f, 1f), shadow = glowShadow)
             }
-            drawText(tl, color = colour, topLeft = topLeft, shadow = shadow)
+            railText(tl, color = colour, topLeft = topLeft, shadow = shadow)
         }
     }
     // The letter bubble, 44 units left of the stars, following the thumb.
@@ -617,6 +617,6 @@ private fun DrawScope.drawConstellation(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         st.ring?.let { drawCircle(GOLD.copy(alpha = act), radius = r, center = q, style = it) }
         val tl = bubbles[st.bubbleIdx.coerceIn(0, N - 1)]
-        drawText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
 }

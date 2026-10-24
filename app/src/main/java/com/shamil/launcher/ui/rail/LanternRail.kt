@@ -375,7 +375,7 @@ private fun DrawScope.drawLanterns(
                 if (on) drawRoundRect(accent, topLeft = bodyTop, size = bodySize, cornerRadius = p.corner, style = p.ring)
                 val tl = p.letters[i]
                 val ink = if (has[i] || on) LANTERN_INK else railColour.copy(alpha = 0.45f)
-                drawText(tl, color = ink, topLeft = Offset(-tl.size.width / 2f, 12.5f * u - tl.size.height / 2f))
+                railText(tl, color = ink, topLeft = Offset(-tl.size.width / 2f, 12.5f * u - tl.size.height / 2f))
             }
         }
     }
@@ -386,7 +386,7 @@ private fun DrawScope.drawLanterns(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         drawCircle(LANTERN_GOLD.copy(alpha = act), radius = r, center = q, style = p.bubbleRing)
         val tl = bubbles[st.shown.coerceIn(0, LANTERN_COUNT - 1)]
-        drawText(tl, color = LANTERN_LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = LANTERN_LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
 }
 

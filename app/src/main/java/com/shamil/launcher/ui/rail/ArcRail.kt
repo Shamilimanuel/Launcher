@@ -240,7 +240,9 @@ fun Modifier.arcRailInput(state: ArcRailState, enabled: Boolean): Modifier = if 
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val g = state.geo ?: return@awaitEachGesture
-        val p = down.position
+        // Left-hand mode: the arc is drawn mirrored, so read the finger mirrored too.
+        fun m(o: Offset) = if (RailSide.left) Offset(g.w - o.x, o.y) else o
+        val p = m(down.position)
         if (abs(g.dist(p) - g.r) > 30f * g.s) return@awaitEachGesture
         val f0 = g.f(p)
         if (f0 < -0.8f || f0 > N - 0.2f) return@awaitEachGesture
@@ -270,17 +272,17 @@ fun Modifier.arcRailInput(state: ArcRailState, enabled: Boolean): Modifier = if 
             }
             if (held) { change.consume(); continue }
             if (!claimed) {
-                val d = change.position - p
+                val d = m(change.position) - p
                 val dist = d.getDistance()
                 if (dist < viewConfiguration.touchSlop) continue
                 // Mostly along the curve = ours; across it (a scroll, an app swipe) = not ours.
                 val tan = g.tangent(f0)
                 if (abs(d.x * tan.x + d.y * tan.y) / dist < 0.6f) return@awaitEachGesture
                 claimed = true
-                state.start(change.position)
+                state.start(m(change.position))
             }
             change.consume()
-            state.move(change.position)
+            state.move(m(change.position))
         }
         if (claimed) {
             val slid = state.end()
@@ -367,7 +369,7 @@ private fun DrawScope.drawArc(
         val tl = letters[i]
         val k = 1f + 0.42f * l
         withTransform({ scale(k, k, q) }) {
-            drawText(tl, color = colour, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = show.coerceIn(0f, 1f))
+            railText(tl, color = colour, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = show.coerceIn(0f, 1f))
         }
     }
     // The light trail behind the guide: thick and bright where it just was, thinning and fading behind.
@@ -406,7 +408,7 @@ private fun DrawScope.drawArc(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         drawCircle(GOLD.copy(alpha = act), radius = r, center = q, style = Stroke(width = 2f * s))
         val tl = bubbles[idx]
-        drawText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
 }
 

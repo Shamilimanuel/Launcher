@@ -421,9 +421,9 @@ private fun DrawScope.drawGuide(
                 val g = if (has) l else l * 0.5f   // empty letters glow only half as much
                 translate(q.x, q.y) { drawCircle(glowBrush, radius = 16f * s, center = Offset.Zero, alpha = g) }
                 // The glow: the letter again, in warm gold with a blurred gold shadow, under the real letter.
-                drawText(tl, color = GLOW_TEXT, topLeft = topLeft, alpha = (0.935f * g).coerceIn(0f, 1f), shadow = glowShadow)
+                railText(tl, color = GLOW_TEXT, topLeft = topLeft, alpha = (0.935f * g).coerceIn(0f, 1f), shadow = glowShadow)
             }
-            drawText(tl, color = colour, topLeft = topLeft, shadow = shadow)
+            railText(tl, color = colour, topLeft = topLeft, shadow = shadow)
         }
     }
     // Sparks.
@@ -450,6 +450,6 @@ private fun DrawScope.drawGuide(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         st.ring?.let { drawCircle(GOLD.copy(alpha = act), radius = r, center = q, style = it) }
         val tl = bubbles[st.bubbleIdx.coerceIn(0, N - 1)]
-        drawText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
 }

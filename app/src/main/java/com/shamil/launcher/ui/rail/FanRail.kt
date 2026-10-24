@@ -503,9 +503,9 @@ private fun DrawScope.drawFan(
             if (b > 0.02f) {
                 val g = if (has) b * 0.9f else b * 0.45f
                 translate(q.x, q.y) { drawCircle(glowBrush, radius = 16f * s, center = Offset.Zero, alpha = g) }
-                drawText(tl, color = GLOW_TEXT, topLeft = topLeft, alpha = g.coerceIn(0f, 1f), shadow = glowShadow)
+                railText(tl, color = GLOW_TEXT, topLeft = topLeft, alpha = g.coerceIn(0f, 1f), shadow = glowShadow)
             }
-            drawText(tl, color = colour, topLeft = topLeft, shadow = shadow)
+            railText(tl, color = colour, topLeft = topLeft, shadow = shadow)
         }
     }
     val cx = st.cx()
@@ -517,7 +517,7 @@ private fun DrawScope.drawFan(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         st.ring?.let { drawCircle(GOLD.copy(alpha = act), radius = r, center = q, style = it) }
         val tl = bubbles[st.bubbleIdx.coerceIn(0, N - 1)]
-        drawText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
     // The petals.
     val r = FAN_R * s
@@ -542,19 +542,21 @@ private fun DrawScope.drawFan(
                 val app = st.apps[k]
                 if (app != null) {
                     val half = st.iconPx / 2
-                    drawImage(
-                        image = app.icon,
-                        srcOffset = IntOffset.Zero,
-                        srcSize = IntSize(app.icon.width, app.icon.height),
-                        dstOffset = IntOffset(-half, -half),
-                        dstSize = IntSize(st.iconPx, st.iconPx),
-                        alpha = alpha,
-                        filterQuality = FilterQuality.Low,
-                    )
+                    upright(Offset.Zero) {
+                        drawImage(
+                            image = app.icon,
+                            srcOffset = IntOffset.Zero,
+                            srcSize = IntSize(app.icon.width, app.icon.height),
+                            dstOffset = IntOffset(-half, -half),
+                            dstSize = IntSize(st.iconPx, st.iconPx),
+                            alpha = alpha,
+                            filterQuality = FilterQuality.Low,
+                        )
+                    }
                 } else {
                     // "+N more": a gold petal with "…".
                     st.moreBrush?.let { drawCircle(it, radius = PETAL_HALF * s, center = Offset.Zero, alpha = alpha) }
-                    drawText(dots, color = MORE_INK, topLeft = Offset(-dots.size.width / 2f, -dots.size.height / 2f), alpha = alpha)
+                    railText(dots, color = MORE_INK, topLeft = Offset(-dots.size.width / 2f, -dots.size.height / 2f), alpha = alpha)
                 }
                 // The name in a small dark pill under the icon.
                 val label = st.labels[k]
@@ -563,7 +565,7 @@ private fun DrawScope.drawFan(
                     val ph = label.size.height + 4f * s
                     val top = (PETAL_HALF + 6f) * s
                     drawRoundRect(NAME_PILL, topLeft = Offset(-pw / 2f, top), size = Size(pw, ph), cornerRadius = CornerRadius(ph / 2f), alpha = alpha)
-                    drawText(label, topLeft = Offset(-label.size.width / 2f, top + 2f * s), alpha = alpha, shadow = shadow)
+                    railText(label, topLeft = Offset(-label.size.width / 2f, top + 2f * s), alpha = alpha, shadow = shadow)
                 }
             }
         }

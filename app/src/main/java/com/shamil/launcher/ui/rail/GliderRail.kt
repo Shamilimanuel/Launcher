@@ -369,7 +369,7 @@ private fun DrawScope.drawGlider(
             translate(cx, cy); rotate(st.tilt[i] * GLIDER_TO_DEG, Offset.Zero); scale(grow, grow, Offset.Zero)
         }) {
             if (glow > 0.01f) drawCircle(p.halo, radius = 16f * u, center = Offset.Zero, alpha = glow)
-            drawText(tl, color = colour, topLeft = Offset(-tl.size.width / 2f, -tl.size.height / 2f))
+            railText(tl, color = colour, topLeft = Offset(-tl.size.width / 2f, -tl.size.height / 2f))
         }
     }
     // The letter bubble, riding the wind a little left of the lifted letter.
@@ -380,7 +380,7 @@ private fun DrawScope.drawGlider(
         drawCircle(panel.copy(alpha = 0.95f * act), radius = r, center = q)
         drawCircle(GLIDER_GOLD.copy(alpha = act), radius = r, center = q, style = p.bubbleRing)
         val tl = bubbles[st.shown.coerceIn(0, GLIDER_COUNT - 1)]
-        drawText(tl, color = GLIDER_LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
+        railText(tl, color = GLIDER_LIGHT, topLeft = Offset(q.x - tl.size.width / 2f, q.y - tl.size.height / 2f), alpha = act)
     }
 }
 

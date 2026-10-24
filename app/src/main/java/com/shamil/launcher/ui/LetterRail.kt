@@ -1,5 +1,6 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.rail.RailSide
 import android.os.SystemClock
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -217,6 +218,7 @@ fun LetterRail(
                 ) {
                     Text(
                         item,
+                        modifier = Modifier.graphicsLayer { scaleX = if (RailSide.left) -1f else 1f },
                         style = TextStyle(
                             fontFamily = look.font, fontWeight = FontWeight.Bold, color = color,
                             fontSize = 15.sp, lineHeight = 17.sp, shadow = look.shadow,
@@ -244,6 +246,7 @@ fun LetterRail(
             ) {
                 Text(
                     bubbleLetter,
+                    modifier = Modifier.graphicsLayer { scaleX = if (RailSide.left) -1f else 1f },
                     style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.text, fontSize = 28.sp),
                 )
             }

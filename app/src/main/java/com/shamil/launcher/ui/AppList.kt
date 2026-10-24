@@ -1,5 +1,6 @@
 package com.shamil.launcher.ui
 
+import com.shamil.launcher.ui.rail.RailSide
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -153,7 +154,9 @@ fun AppList(
             .fillMaxSize()
             .onGloballyPositioned { listTop = it.positionInRoot().y }
             .fadeAbove(topPadding),
-        contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding, end = 56.dp),
+        // Room for the A–Z rail on its side (left-hand mode: the left).
+        contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding,
+            start = if (RailSide.left) 44.dp else 0.dp, end = if (RailSide.left) 12.dp else 56.dp),
     ) {
         sections.forEach { (sectionLetter, group) ->
             item(key = "header-$sectionLetter") { SectionHeader(sectionLetter) }
