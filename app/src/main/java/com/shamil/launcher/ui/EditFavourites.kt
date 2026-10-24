@@ -163,6 +163,15 @@ fun EditFavouritesScreen(
                     }
                 }
 
+                // The widgets on his home, first (they sit above the favourites on the home): untick one to take it off (asks first), or add another.
+                if (!searching) {
+                    item(key = "h-widgets") { EditSection("Widgets · ${widgets.stack.size}") }
+                    items(widgets.stack, key = { "w-${it.key}" }) { entry ->
+                        WidgetEditRow(entry, modifier = Modifier.animateItem(), onClick = { removing = entry })
+                    }
+                    item(key = "w-add") { AddWidgetRow { SeelieSettings.open(context, SeelieSettings.PAGE_WIDGETS) } }
+                }
+
                 item(key = "h-selected") { EditSection("Selected · ${order.size}") }
                 items(order, key = { "sel-${it.key}" }) { app ->
                     val isDragged = dragging == app.key
@@ -205,15 +214,6 @@ fun EditFavouritesScreen(
                             }
                         },
                     )
-                }
-
-                // The widgets on his home: untick one to take it off (asks first), or add another.
-                if (!searching) {
-                    item(key = "h-widgets") { EditSection("Widgets · ${widgets.stack.size}") }
-                    items(widgets.stack, key = { "w-${it.key}" }) { entry ->
-                        WidgetEditRow(entry, modifier = Modifier.animateItem(), onClick = { removing = entry })
-                    }
-                    item(key = "w-add") { AddWidgetRow { SeelieSettings.open(context, SeelieSettings.PAGE_WIDGETS) } }
                 }
 
                 if (suggestions.isNotEmpty() && !searching) {
