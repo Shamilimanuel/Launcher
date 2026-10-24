@@ -108,6 +108,7 @@ import com.shamil.launcher.DefaultHome
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.LaunchStats
 import com.shamil.launcher.apps.VaultStore
+import com.shamil.launcher.apps.PendingOpen
 import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.rememberAppTweaks
 import com.shamil.launcher.apps.rememberApps
@@ -235,6 +236,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     BackHandler(enabled = popups.openKey != null) { popups.close() }
 
     // The app whose menu is open (long-press), or null.
+    var lockPick by remember { mutableStateOf<AppEntry?>(null) }
     var menuApp by remember { mutableStateOf<AppEntry?>(null) }
     // The PIN vault (hold • on the rail).
     var vaultOpen by remember { mutableStateOf(false) }
@@ -469,9 +471,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         }
         // A locked app asking for the code (from a tap, search, a gesture, a shortcut or a notification).
         AnimatedVisibility(visible = vault.pending != null, enter = fadeIn(tween(200)), exit = fadeOut(tween(160))) {
-            var label by remember { mutableStateOf("") }
-            vault.pending?.first?.let { label = it }
-            LockGate(label)
+            // Kept while it fades out, after the pending app is gone.
+            var shown by remember { mutableStateOf<PendingOpen?>(null) }
+            vault.pending?.let { shown = it }
+            shown?.let { LockGate(it.label, it.code) }
         }
 
         if (!state.searching && !state.editingFavourites && !vaultOpen) {
@@ -550,6 +553,14 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             },
         )
     }
+    // Lock with code, when he has more than one code: which one opens this app?
+    lockPick?.let { app ->
+        LockCodePicker(vault, app.label, onPick = { code ->
+            vault.setLocked(app.component.packageName, true, code)
+            lockPick = null
+            Toast.makeText(context, "${app.label} is locked with your ${code.title.lowercase()}", Toast.LENGTH_SHORT).show()
+        }, onDismiss = { lockPick = null })
+    }
     menuApp?.takeIf { it.shortcutId == null }?.let { app ->
         val pkg = app.component.packageName
         AppMenuSheet(
@@ -575,10 +586,14 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             isLocked = vault.isLocked(pkg),
             onToggleLock = {
                 val on = !vault.isLocked(pkg)
-                vault.setLocked(pkg, on)
-                // No code yet: make one first (the vault's setup screen).
-                if (on && !vault.hasPin) vaultOpen = true
-                else Toast.makeText(context, if (on) "${app.label} is locked" else "${app.label} is unlocked", Toast.LENGTH_SHORT).show()
+                // More than one code made: he picks which one opens it.
+                if (on && vault.madeCodes.size > 1) lockPick = app
+                else {
+                    vault.setLocked(pkg, on)
+                    // No code yet: make one first (the vault's setup screen).
+                    if (on && !vault.hasPin) vaultOpen = true
+                    else Toast.makeText(context, if (on) "${app.label} is locked" else "${app.label} is unlocked", Toast.LENGTH_SHORT).show()
+                }
             },
         )
     }

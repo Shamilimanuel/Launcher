@@ -24,17 +24,51 @@ import javax.crypto.spec.PBEKeySpec
  * The PIN itself is never stored: only a salted PBKDF2 hash (the standard way to keep passwords), so even someone
  * reading Seelie's files can't get it back.
  */
+/**
+ * The three kinds of code (24 Oct): he makes each once, and every locked app picks which one opens it
+ * (his ask: "one has a pin code and the other has a letter code or a fun code"). The ids are saved: never rename.
+ */
+enum class LockCode(val id: String, val title: String) {
+    PIN("pin", "PIN"),
+    PASSWORD("password", "Password"),
+    FUN("fun", "Fun lock");
+
+    companion object {
+        fun byId(id: String?): LockCode? = entries.firstOrNull { it.id == id }
+    }
+}
+
+/** A locked app waiting for its code: its name (for the screen), which code opens it, and what to do once it's right. */
+class PendingOpen(val label: String, val code: LockCode, val open: () -> Unit)
+
 class VaultStore private constructor(context: Context) {
     private val prefs = context.getSharedPreferences("vault", Context.MODE_PRIVATE)
+
+    init {
+        // Before 24 Oct there was one code slot; a password lived in the PIN's keys. Move it to its own slot once.
+        if (prefs.getBoolean(KEY_MODE, false) && prefs.contains(KEY_HASH) && !prefs.contains(KEY_PW_HASH)) {
+            prefs.edit {
+                putString(KEY_PW_SALT, prefs.getString(KEY_SALT, ""))
+                putString(KEY_PW_HASH, prefs.getString(KEY_HASH, ""))
+                remove(KEY_SALT); remove(KEY_HASH); remove(KEY_LENGTH)
+            }
+        }
+    }
 
     /** Package names of the apps in the vault. */
     var apps by mutableStateOf(prefs.getStringSet(KEY_APPS, emptySet())?.toSet() ?: emptySet())
         private set
-    var hasPin by mutableStateOf(prefs.contains(KEY_HASH))
+    /** A number PIN is made. */
+    var hasPinCode by mutableStateOf(prefs.contains(KEY_HASH))
         private set
+    /** A password is made. */
+    var hasPassword by mutableStateOf(prefs.contains(KEY_PW_HASH))
+        private set
+    /** Any code at all (the vault needs one before it can be used). */
+    val hasPin: Boolean get() = hasPinCode || hasPassword
     var fingerprint by mutableStateOf(prefs.getBoolean(KEY_FINGER, true))
         private set
-    /** true = a free password (letters, symbols, any length) typed on the keyboard; false = a number PIN on the pad. */
+    /** What opens the VAULT: true = his password, false = his number PIN. Locked apps each pick their own (see [lockCodeOf]). */
     var passwordMode by mutableStateOf(prefs.getBoolean(KEY_MODE, false))
         private set
     /** Open right now? Only in memory: every restart, Home press or app launch locks it again. */
@@ -57,13 +91,40 @@ class VaultStore private constructor(context: Context) {
     var locked by mutableStateOf(prefs.getStringSet(KEY_LOCKED, emptySet())?.toSet() ?: emptySet())
         private set
     fun isLocked(packageName: String) = packageName in locked
-    fun setLocked(packageName: String, on: Boolean) {
+    fun setLocked(packageName: String, on: Boolean, code: LockCode? = null) {
         locked = if (on) locked + packageName else locked - packageName
-        prefs.edit { putStringSet(KEY_LOCKED, locked) }
+        lockCodes = if (on && code != null) lockCodes + (packageName to code) else lockCodes - packageName
+        prefs.edit {
+            putStringSet(KEY_LOCKED, locked)
+            putStringSet(KEY_LOCK_CODES, lockCodes.map { (pkg, c) -> pkg + "|" + c.id }.toSet())
+        }
     }
 
-    /** A locked app waiting for the code: its name (for the screen) and what to do once the code is right. */
-    var pending by mutableStateOf<Pair<String, () -> Unit>?>(null)
+    /** Which code each locked app asked for (apps not in here use the vault's code). */
+    private var lockCodes by mutableStateOf(
+        prefs.getStringSet(KEY_LOCK_CODES, emptySet()).orEmpty().mapNotNull { e ->
+            val parts = e.split('|', limit = 2)
+            if (parts.size != 2) null else LockCode.byId(parts[1])?.let { parts[0] to it }
+        }.toMap()
+    )
+
+    /** The vault's own code. */
+    val vaultCode: LockCode get() = if (passwordMode) LockCode.PASSWORD else LockCode.PIN
+
+    fun hasCode(code: LockCode) = when (code) {
+        LockCode.PIN -> hasPinCode
+        LockCode.PASSWORD -> hasPassword
+        LockCode.FUN -> gameKind != null
+    }
+
+    /** The codes he has made, in order: the ones a locked app can pick from. */
+    val madeCodes: List<LockCode> get() = LockCode.entries.filter { hasCode(it) }
+
+    /** The code that opens [packageName]: its own pick, or the vault's code if it has none (or that code was removed). */
+    fun lockCodeOf(packageName: String): LockCode = lockCodes[packageName]?.takeIf { hasCode(it) } ?: vaultCode
+
+    /** A locked app waiting for its code. */
+    var pending by mutableStateOf<PendingOpen?>(null)
         private set
 
     /**
@@ -71,12 +132,12 @@ class VaultStore private constructor(context: Context) {
      * a tap, search, a gesture, a shortcut, a notification.
      */
     fun guard(packageName: String, label: String, open: () -> Unit) {
-        if (packageName !in locked || !hasPin || unlocked) open() else pending = label to open
+        if (packageName !in locked || !hasPin || unlocked) open() else pending = PendingOpen(label, lockCodeOf(packageName), open)
     }
 
     /** The code was right: open the waiting app, and lock again straight after. */
     fun finishPending() {
-        val action = pending?.second
+        val action = pending?.open
         pending = null
         unlocked = false
         action?.invoke()
@@ -98,32 +159,50 @@ class VaultStore private constructor(context: Context) {
     /**
      * Sets a new code: a number PIN or (with [password]) anything he likes, letters, symbols, any length (his ask, 23 Oct).
      * A fresh random salt, then the slow hash of code + salt; the code itself is never kept.
+     * [forVault] = it also becomes the code that opens the vault (and opens it now); false = only made, for locked apps.
      */
-    fun setPin(pin: String, password: Boolean = false) {
+    fun setPin(pin: String, password: Boolean = false, forVault: Boolean = true) {
         val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
         prefs.edit {
-            putString(KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-            putString(KEY_HASH, Base64.encodeToString(hash(pin, salt), Base64.NO_WRAP))
-            putBoolean(KEY_MODE, password)
-            if (password) remove(KEY_LENGTH) else putInt(KEY_LENGTH, pin.length)
+            if (password) {
+                putString(KEY_PW_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                putString(KEY_PW_HASH, Base64.encodeToString(hash(pin, salt), Base64.NO_WRAP))
+            } else {
+                putString(KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
+                putString(KEY_HASH, Base64.encodeToString(hash(pin, salt), Base64.NO_WRAP))
+                putInt(KEY_LENGTH, pin.length)
+            }
+            if (forVault) putBoolean(KEY_MODE, password)
         }
-        pinLength = if (password) 0 else pin.length
-        passwordMode = password
-        hasPin = true
-        unlocked = true
+        if (password) hasPassword = true else { hasPinCode = true; pinLength = pin.length }
+        if (forVault) {
+            passwordMode = password
+            unlocked = true
+        }
     }
 
-    /** Checks a PIN; right = unlocked. Wrong 5 times in a row = 30 seconds of waiting. */
-    fun tryPin(pin: String): Boolean {
+    /** The vault opens with [code] from now on (only a PIN or password, and only if it's made). */
+    fun useForVault(code: LockCode) {
+        if (code == LockCode.FUN || !hasCode(code)) return
+        passwordMode = code == LockCode.PASSWORD
+        prefs.edit { putBoolean(KEY_MODE, passwordMode) }
+    }
+
+    /** Checks the vault's code; right = unlocked. */
+    fun tryPin(pin: String): Boolean = tryCode(pin, vaultCode)
+
+    /** Checks [pin] against his PIN or password; right = unlocked. Wrong 5 times in a row (any code) = 30 seconds of waiting. */
+    fun tryCode(pin: String, code: LockCode): Boolean {
         if (SystemClock.uptimeMillis() < lockedUntil) return false
-        val salt = Base64.decode(prefs.getString(KEY_SALT, "") ?: "", Base64.NO_WRAP)
-        val stored = Base64.decode(prefs.getString(KEY_HASH, "") ?: "", Base64.NO_WRAP)
+        val password = code == LockCode.PASSWORD
+        val salt = Base64.decode(prefs.getString(if (password) KEY_PW_SALT else KEY_SALT, "") ?: "", Base64.NO_WRAP)
+        val stored = Base64.decode(prefs.getString(if (password) KEY_PW_HASH else KEY_HASH, "") ?: "", Base64.NO_WRAP)
         // A constant-time compare, so the time it takes doesn't give anything away.
         val ok = stored.isNotEmpty() && MessageDigest.isEqual(hash(pin, salt), stored)
         if (ok) {
             wrongTries = 0
             // A PIN made before this existed: learn its length now, so next time no OK is needed.
-            if (!passwordMode && pinLength == 0) {
+            if (!password && pinLength == 0) {
                 pinLength = pin.length
                 prefs.edit { putInt(KEY_LENGTH, pin.length) }
             }
@@ -216,6 +295,9 @@ class VaultStore private constructor(context: Context) {
         private const val KEY_FINGER = "fingerprint"
         private const val KEY_MODE = "password_mode"
         private const val KEY_LENGTH = "pin_length"
+        private const val KEY_PW_HASH = "pw_hash"
+        private const val KEY_PW_SALT = "pw_salt"
+        private const val KEY_LOCK_CODES = "lock_codes"
         private const val KEY_GAME_KIND = "game_kind"
         private const val KEY_GAME_SALT = "game_salt"
         private const val KEY_GAME_HASH = "game_hash"

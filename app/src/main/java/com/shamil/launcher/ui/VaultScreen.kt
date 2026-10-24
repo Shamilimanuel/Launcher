@@ -86,6 +86,7 @@ import com.shamil.launcher.R
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.Apps
 import com.shamil.launcher.apps.VaultStore
+import com.shamil.launcher.apps.LockCode
 import com.shamil.launcher.settings.pressFeel
 import com.shamil.launcher.settings.staggerIn
 import com.shamil.launcher.ui.theme.Cinzel
@@ -157,7 +158,7 @@ private fun CodeKindChooser(onPick: (String) -> Unit) {
 
 /** Make a password: type it, then again. At least 4 characters, anything allowed. */
 @Composable
-private fun PasswordSetup(onDone: () -> Unit) {
+private fun PasswordSetup(onDone: () -> Unit, forVault: Boolean = true) {
     val context = LocalContext.current
     val vault = remember { VaultStore.get(context) }
     var first by remember { mutableStateOf<String?>(null) }
@@ -173,7 +174,7 @@ private fun PasswordSetup(onDone: () -> Unit) {
             val f = first
             when {
                 f == null -> { first = entry; entry = "" }
-                f == entry -> { vault.setPin(entry, password = true); onDone() }
+                f == entry -> { vault.setPin(entry, password = true, forVault = forVault); onDone() }
                 else -> { first = null; entry = ""; message = "They didn't match. Start again." }
             }
         },
@@ -202,7 +203,7 @@ private fun PasswordUnlock(vault: VaultStore, title: String = "Vault") {
         onSubmit = {
             if (SystemClock.uptimeMillis() < vault.lockedUntil) {
                 message = "Too many tries. Wait a moment."
-            } else if (!vault.tryPin(entry)) {
+            } else if (!vault.tryCode(entry, LockCode.PASSWORD)) {
                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Wrong password"
                 entry = ""
@@ -270,20 +271,23 @@ private fun PasswordLayout(
 }
 
 /**
- * Every unlock screen: his fun lock when he has one (the game shows first, "Use PIN" on it), else the PIN pad or
- * password. On the PIN screen a small "✦ Fun lock" chip at the top goes back to the game.
+ * Every unlock screen. [code] = what opens it (null = the vault itself). The vault and fun-locked apps show his fun
+ * lock first ("Use PIN" on it goes to the vault's code, the backup); a small "✦ Fun lock" chip goes back to the game.
+ * Apps locked with the PIN or the password just ask for that one.
  */
 @Composable
-private fun Unlock(vault: VaultStore, title: String = "Vault") {
+private fun Unlock(vault: VaultStore, title: String = "Vault", code: LockCode? = null) {
     val kind = FunLockKind.byId(vault.gameKind)
+    val wantsGame = kind != null && (code == null || code == LockCode.FUN)
     var game by remember { mutableStateOf(true) }
-    if (kind != null && game) {
-        FunLockUnlock(vault, kind, title, onUsePin = { game = false })
+    if (wantsGame && game) {
+        FunLockUnlock(vault, kind!!, title, onUsePin = { game = false })
         return
     }
+    val typed = if (code == null || code == LockCode.FUN) vault.vaultCode else code
     Box(Modifier.fillMaxSize()) {
-        if (vault.passwordMode) PasswordUnlock(vault, title) else PinPad(vault, title)
-        if (kind != null) {
+        if (typed == LockCode.PASSWORD) PasswordUnlock(vault, title) else PinPad(vault, title)
+        if (wantsGame) {
             val look = LocalLauncherLook.current
             Text("✦ Fun lock", modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(12.dp).clip(CircleShape)
                 .border(1.dp, look.accent.copy(alpha = 0.45f), CircleShape).clickable { game = true }
@@ -332,7 +336,7 @@ private fun FunLockUnlock(vault: VaultStore, kind: FunLockKind, title: String, o
  * back or ✕ cancels. It never leaves the vault open: it locks again right after.
  */
 @Composable
-fun LockGate(label: String) {
+fun LockGate(label: String, code: LockCode) {
     val context = LocalContext.current
     val vault = remember { VaultStore.get(context) }
     val look = LocalLauncherLook.current
@@ -345,7 +349,7 @@ fun LockGate(label: String) {
             .background(Brush.verticalGradient(listOf(look.sheetTop.copy(alpha = 0.97f), look.sheet.copy(alpha = 0.99f))))
             .clickable(remember { MutableInteractionSource() }, null) {}
     ) {
-        Unlock(vault, label)
+        Unlock(vault, label, code)
         Box(
             Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp).size(44.dp).clip(CircleShape)
                 .clickable { vault.cancelPending() },
@@ -356,7 +360,7 @@ fun LockGate(label: String) {
 
 /** Make a number PIN on the round pad: 4–6 digits, then again. */
 @Composable
-private fun NumberSetup(onDone: () -> Unit) {
+private fun NumberSetup(onDone: () -> Unit, forVault: Boolean = true) {
     val context = LocalContext.current
     val vault = remember { VaultStore.get(context) }
     var first by remember { mutableStateOf<String?>(null) }
@@ -374,7 +378,7 @@ private fun NumberSetup(onDone: () -> Unit) {
             val f = first
             when {
                 f == null -> { first = entry; entry = ""; message = null }
-                f == entry -> { vault.setPin(entry); onDone() }
+                f == entry -> { vault.setPin(entry, forVault = forVault); onDone() }
                 else -> { first = null; entry = ""; message = "They didn't match. Start again." }
             }
         },
@@ -402,7 +406,7 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
             entry = ""
             return
         }
-        if (!vault.tryPin(entry)) {
+        if (!vault.tryCode(entry, LockCode.PIN)) {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Wrong PIN"
             entry = ""
@@ -555,12 +559,13 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
     val context = LocalContext.current
     val look = LocalLauncherLook.current
     var adding by remember { mutableStateOf(false) }
-    var changingPin by remember { mutableStateOf(false) }
     var settingFunLock by remember { mutableStateOf(false) }
+    // Making or changing one code from settings: "pin" or "password" (it doesn't change what opens the vault).
+    var making by remember { mutableStateOf<String?>(null) }
     var removing by remember { mutableStateOf<AppEntry?>(null) }
-    if (changingPin) {
-        PinSetup(onDone = { changingPin = false })
-        return
+    when (making) {
+        "pin" -> { NumberSetup(onDone = { making = null }, forVault = false); return }
+        "password" -> { PasswordSetup(onDone = { making = null }, forVault = false); return }
     }
     if (settingFunLock) {
         FunLockSetup(vault, onDone = { settingFunLock = false })
@@ -617,11 +622,22 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                     VaultSetting(if (vault.fingerprint) "Fingerprint: on" else "Fingerprint: off", "Unlock with your fingerprint as well as the PIN") {
                         vault.useFingerprint(!vault.fingerprint)
                     }
-                    VaultSetting("Change code", "A new PIN or password (numbers, or anything you like)") { changingPin = true }
+                    val other = if (vault.vaultCode == LockCode.PIN) LockCode.PASSWORD else LockCode.PIN
+                    VaultSetting("Vault opens with: " + vault.vaultCode.title,
+                        if (vault.hasCode(other)) "Tap to use your ${other.title.lowercase()} instead" else "Make a ${other.title.lowercase()} below to switch") {
+                        vault.useForVault(other)
+                    }
+                    VaultSetting("PIN: " + if (vault.hasPinCode) "made" else "not made yet",
+                        if (vault.hasPinCode) "Tap to change it (4 to 6 digits)" else "Tap to make one (4 to 6 digits)") { making = "pin" }
+                    VaultSetting("Password: " + if (vault.hasPassword) "made" else "not made yet",
+                        if (vault.hasPassword) "Tap to change it" else "Letters, numbers, symbols, any length") { making = "password" }
                     val pinLooks = remember { PinLookStore.get(context) }
                     VaultSetting("PIN look: " + pinLooks.look.title, "Tap to try the next look: Compact glass, Seelie dots, Light trail, Round") { pinLooks.next() }
                     VaultSetting("Fun lock: " + (FunLockKind.byId(vault.gameKind)?.title ?: "off"),
                         "A little game as an extra way in: elements, seelies or lanterns. Your PIN keeps working.") { settingFunLock = true }
+                    Text("Locked apps can each use any of these codes: long-press an app → Lock with code.",
+                        modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 6.dp),
+                        style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
                     Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings.",
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
@@ -659,4 +675,30 @@ private fun VaultSetting(title: String, sub: String, onClick: () -> Unit) {
         Text(title, style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 16.sp))
         Text(sub, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.5.sp))
     }
+}
+
+/** Long-press → Lock with code, when he has made more than one code: which one opens [appLabel]? */
+@Composable
+fun LockCodePicker(vault: VaultStore, appLabel: String, onPick: (LockCode) -> Unit, onDismiss: () -> Unit) {
+    val look = LocalLauncherLook.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = look.sheet,
+        title = { Text("Which code opens $appLabel?", color = look.text) },
+        text = {
+            Column {
+                vault.madeCodes.forEach { c ->
+                    val sub = when (c) {
+                        LockCode.PIN -> "Your number PIN"
+                        LockCode.PASSWORD -> "Your password"
+                        LockCode.FUN -> FunLockKind.byId(vault.gameKind)?.title ?: "Your fun lock"
+                    } + if (c == vault.vaultCode) " · same as the vault" else ""
+                    VaultSetting(c.title, sub) { onPick(c) }
+                }
+                Text("Your fingerprint opens it too, when that's on.", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onDismiss) { Text("Cancel", color = look.textDim) } },
+    )
 }
