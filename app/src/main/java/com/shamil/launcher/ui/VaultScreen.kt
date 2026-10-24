@@ -1,5 +1,8 @@
 package com.shamil.launcher.ui
 
+import androidx.compose.runtime.mutableIntStateOf
+import com.shamil.launcher.ui.vault.TrailPadLayout
+import com.shamil.launcher.ui.vault.SeelieDotsPadLayout
 import com.shamil.launcher.ui.vault.PinLookStore
 import com.shamil.launcher.ui.vault.PinLook
 import com.shamil.launcher.ui.vault.GlassPadLayout
@@ -326,6 +329,8 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
     val shake = remember { Animatable(0f) }
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    // Goes up on every wrong PIN, in the same moment the entry clears (the Seelie dots scatter on it).
+    var wrongTick by remember { mutableIntStateOf(0) }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
     fun askFinger() = askFingerprint(context, vault, title)
     LaunchedEffect(Unit) { if (canFinger) askFinger() }
@@ -340,6 +345,7 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Wrong PIN"
             entry = ""
+            wrongTick++
             // A little shake, like a head saying "no".
             scope.launch {
                 for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
@@ -364,6 +370,7 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
         onDone = { check() },
         // As many dots as his PIN has digits (4 until Seelie knows the length), not always six.
         dotCount = if (vault.pinLength > 0) vault.pinLength else 4,
+        wrongTick = wrongTick,
         onFinger = if (canFinger) ({ askFinger() }) else null,
     )
 }
@@ -398,12 +405,14 @@ private fun fingerprintAvailable(context: android.content.Context): Boolean = wh
 private fun PadLayout(
     title: String, sub: String, entry: String, maxDigits: Int,
     onDigit: (String) -> Unit, onDelete: () -> Unit, doneLabel: String?, onDone: () -> Unit,
-    dotsOffset: Float = 0f, onFinger: (() -> Unit)? = null, dotCount: Int = maxDigits,
+    dotsOffset: Float = 0f, onFinger: (() -> Unit)? = null, dotCount: Int = maxDigits, wrongTick: Int = 0,
 ) {
     // His PIN look (vault settings → PIN look). Compact glass is the default; Round is the first pad.
     val context = LocalContext.current
     when (remember { PinLookStore.get(context) }.look) {
         PinLook.GLASS -> GlassPadLayout(title, sub, entry, dotCount, onDigit, onDelete, doneLabel, onDone, dotsOffset, onFinger)
+        PinLook.SEELIE -> SeelieDotsPadLayout(title, sub, entry, dotCount, onDigit, onDelete, doneLabel, onDone, dotsOffset, onFinger, wrongTick)
+        PinLook.TRAIL -> TrailPadLayout(title, sub, entry, dotCount, onDigit, onDelete, doneLabel, onDone, dotsOffset, onFinger, wrongTick)
         else -> RoundPadLayout(title, sub, entry, maxDigits, onDigit, onDelete, doneLabel, onDone, dotsOffset, onFinger)
     }
 }
@@ -544,7 +553,7 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                     }
                     VaultSetting("Change code", "A new PIN or password (numbers, or anything you like)") { changingPin = true }
                     val pinLooks = remember { PinLookStore.get(context) }
-                    VaultSetting("PIN look: " + pinLooks.look.title, "Tap to try the next look (Seelie dots and Light trail are coming)") { pinLooks.next() }
+                    VaultSetting("PIN look: " + pinLooks.look.title, "Tap to try the next look: Compact glass, Seelie dots, Light trail, Round") { pinLooks.next() }
                     Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings.",
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))

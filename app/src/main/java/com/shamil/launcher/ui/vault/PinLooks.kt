@@ -54,8 +54,8 @@ import com.shamil.launcher.ui.theme.LocalLauncherLook
  */
 enum class PinLook(val id: String, val title: String, val built: Boolean) {
     GLASS("glass", "Compact glass", true),
-    SEELIE("seelie", "Seelie dots", false),
-    TRAIL("trail", "Light trail", false),
+    SEELIE("seelie", "Seelie dots", true),
+    TRAIL("trail", "Light trail", true),
     ROUND("round", "Round (first)", true);
 
     companion object {
