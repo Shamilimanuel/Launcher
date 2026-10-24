@@ -86,6 +86,20 @@ internal class ArcGeometry(val w: Float, val h: Float) {
     fun tangent(f: Float): Offset { val a = angle(f); return Offset(-cos(a), sin(a)) }
 }
 
+/** A touch at [p] lands on the arc's band (where arcRailInput would look at it). */
+internal fun ArcGeometry.near(p: Offset): Boolean {
+    if (abs(dist(p) - r) > 30f * s) return false
+    val f0 = f(p)
+    return f0 >= -0.8f && f0 <= N - 0.2f
+}
+
+/** A move [d] that started at [p] runs along the arc, not across it. */
+internal fun ArcGeometry.along(p: Offset, d: Offset): Boolean {
+    val tan = tangent(f(p))
+    val dist = d.getDistance()
+    return dist > 0f && abs(d.x * tan.x + d.y * tan.y) / dist >= 0.6f
+}
+
 /** What the home hears from the arc (the same as from the edge rail). */
 class ArcCallbacks(
     val onPick: (String) -> Unit,

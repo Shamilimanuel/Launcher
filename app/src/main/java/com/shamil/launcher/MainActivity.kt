@@ -3,6 +3,9 @@ package com.shamil.launcher
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.view.MotionEvent
+import android.view.ViewConfiguration
+import com.shamil.launcher.ui.rail.RailRelay
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.SystemBarStyle
@@ -61,6 +64,16 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         SeelieWidgetHost.start(this)
+    }
+
+    /** The left thumb: a slide on the left edge moves the A–Z rail on the right. */
+    private val railRelay = RailRelay { super.dispatchTouchEvent(it) }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (rescue) return super.dispatchTouchEvent(ev)
+        val decor = window.decorView
+        return railRelay.dispatch(ev, decor.width, decor.height, resources.displayMetrics.density,
+            ViewConfiguration.get(this).scaledTouchSlop)
     }
 
     /** True while Seelie is on screen (from onResume until onStop): tells a Home press apart from coming back from an app. */

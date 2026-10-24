@@ -46,29 +46,38 @@ class RailStore private constructor(context: Context) {
     var style by mutableStateOf(RailStyle.byId(prefs.getString(KEY, null)))
         private set
 
-    init { RailSide.left = prefs.getBoolean(KEY_LEFT, false) }
+    init {
+        RailSide.left = prefs.getBoolean(KEY_LEFT, false)
+        RailSide.edge = prefs.getBoolean(KEY_EDGE, true)
+    }
 
     fun use(s: RailStyle) {
         style = s
         prefs.edit { putString(KEY, s.id) }
     }
 
-    /** Left-hand mode: the rail on the left edge. Part of a save, like the style. */
-    fun useLeft(left: Boolean) {
-        RailSide.left = left
-        prefs.edit { putBoolean(KEY_LEFT, left) }
+    /**
+     * The left thumb: "edge" = a slide on the left edge moves the rail on the right (his pick), "rail" = the rail
+     * itself moves to the left, "off". Part of a save, like the style.
+     */
+    fun useLeftThumb(mode: String) {
+        RailSide.left = mode == "rail"
+        RailSide.edge = mode == "edge"
+        prefs.edit { putBoolean(KEY_LEFT, RailSide.left); putBoolean(KEY_EDGE, RailSide.edge) }
     }
 
     /** Reads it again (after a saved theme was applied). */
     fun reload() {
         style = RailStyle.byId(prefs.getString(KEY, null))
         RailSide.left = prefs.getBoolean(KEY_LEFT, false)
+        RailSide.edge = prefs.getBoolean(KEY_EDGE, true)
     }
 
     companion object {
         const val PREFS = "rail"
         private const val KEY = "style"
         private const val KEY_LEFT = "left"
+        private const val KEY_EDGE = "left_edge"
         @Volatile private var instance: RailStore? = null
 
         fun get(context: Context): RailStore =
@@ -83,7 +92,11 @@ class RailStore private constructor(context: Context) {
  * Plain state, read while drawing, so flipping it redraws without rebuilding anything.
  */
 object RailSide {
+    /** The rail itself is on the left (mirrored). */
     var left by mutableStateOf(false)
+        internal set
+    /** The rail stays right, and the left edge works too (see RailRelay). */
+    var edge by mutableStateOf(true)
         internal set
 }
 

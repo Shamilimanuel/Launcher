@@ -119,8 +119,10 @@ fun ColumnScope.LayoutSettingsContent(onClockFaces: () -> Unit) {
     SectionLabel("A–Z rail")
     Hint("Seelie's own rails, in the order you picked them. The arc ones sit where your thumb rests: drag along the curve to pick a letter (a tap still opens what's under it).")
     val rails = remember { RailStore.get(context) }
-    Choice("Which hand", listOf("right" to "Right (rail on the right)", "left" to "Left (rail on the left)"),
-        if (com.shamil.launcher.ui.rail.RailSide.left) "left" else "right") { rails.useLeft(it == "left") }
+    val side = com.shamil.launcher.ui.rail.RailSide
+    Choice("Left thumb", listOf("edge" to "Left edge works too", "rail" to "Rail on the left", "off" to "Off"),
+        when { side.left -> "rail"; side.edge -> "edge"; else -> "off" }) { rails.useLeftThumb(it) }
+    Hint("Left edge works too: slide your thumb up and down the empty left side and the A–Z on the right follows, as if your thumb were there. A tap there still opens what's under it.")
     RailStyle.entries.filter { it.built }.forEach { style ->
         PresetRow(style.title, style.about, selected = rails.style == style) { rails.use(style) }
     }

@@ -8,6 +8,8 @@ import com.shamil.launcher.ui.rail.PetalFanRail
 import com.shamil.launcher.ui.rail.SeelieGuideRail
 import com.shamil.launcher.ui.rail.ThumbArcLayer
 import com.shamil.launcher.ui.rail.RailSide
+import com.shamil.launcher.ui.rail.RailRelay
+import androidx.compose.runtime.SideEffect
 import com.shamil.launcher.ui.rail.railMirror
 import com.shamil.launcher.ui.rail.rememberArcRailState
 import com.shamil.launcher.ui.rail.arcRailInput
@@ -482,7 +484,13 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             shown?.let { LockGate(it.label, it.code) }
         }
 
-        if (!state.searching && !state.editingFavourites && !vaultOpen) {
+        // The left thumb (RailRelay): only while a rail is on screen.
+        val railOn = !state.searching && !state.editingFavourites && !vaultOpen
+        SideEffect {
+            RailRelay.enabled = railOn
+            RailRelay.arc = if (railStyle.onArc) arcRail else null
+        }
+        if (railOn) {
             // The arc styles draw over the whole home (their touch lives on the home's root, see arcRailInput).
             when (railStyle) {
                 RailStyle.ARC_GUIDE -> ArcRailLayer(arcRail, lettersWithApps, Modifier.railMirror())
