@@ -50,8 +50,12 @@ class MainActivity : ComponentActivity() {
         SeelieWidgetHost.start(this)
     }
 
+    /** True while Seelie is on screen (from onResume until onStop): tells a Home press apart from coming back from an app. */
+    private var inFront = false
+
     override fun onStop() {
         super.onStop()
+        inFront = false
         SeelieWidgetHost.stop(this)
         // Leaving the home (an app opens, the screen goes off) locks the vault again.
         VaultStore.get(this).lock()
@@ -59,15 +63,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        inFront = true
         // Re-check every time we come to the front, e.g. after changing the Home app in Settings.
         isDefault = DefaultHome.isDefault(this)
         // His wallpaper may have changed while he was away ("Match my wallpaper" theme).
         looks.refreshWallpaper()
     }
 
-    /** Android calls this when Home is pressed while we're already open: go back to the favourites. */
+    /**
+     * Android calls this on every Home press. Already on Seelie: back to the favourites. Coming back from an app
+     * (24 Oct: "I go to G, open Google, press Home: keep it where I entered"): stay in the A–Z where he was.
+     */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        home.reset()
+        if (inFront) home.reset() else home.returnFromApp()
     }
 }

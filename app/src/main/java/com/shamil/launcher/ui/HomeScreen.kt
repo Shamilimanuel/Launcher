@@ -112,6 +112,11 @@ class HomeState {
         query = ""
     }
 
+    /** Back from an app he opened: the A–Z stays where it was, only the search box closes. */
+    fun returnFromApp() {
+        closeSearch()
+    }
+
     fun reset() {
         listLetter = null
         editingFavourites = false
