@@ -74,6 +74,8 @@ fun ColumnScope.LiveBgSettingsContent(showPreview: Boolean = true) {
         if (s.inSaver) "Battery saver is on, so your home runs the light version: calm, 30 fps, and no clouds, mist, light rays or aurora."
         else "Battery saver is on, so your home shows just your wallpaper for now (\"In battery saver\" is off below)."
     )
+    // Main switch on but every effect off (e.g. after the "Off" preset): say so, or the home looks broken (24 Oct).
+    if (s.enabled && !s.anythingOn()) Hint("All effects are off, so your home shows just your wallpaper. Pick a preset or switch an effect on below.")
     if (!gate.animationsOn) Hint("Android's animations are off (Developer options → Animator duration scale), so the living background rests as well.")
 
     SectionLabel("Living background")
