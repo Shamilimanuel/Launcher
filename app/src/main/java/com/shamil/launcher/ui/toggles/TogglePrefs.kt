@@ -44,6 +44,10 @@ data class ToggleSetup(
     val volumeLook: String = "gold",
     /** A soft click on each volume step (from the video he liked). */
     val volumeClick: Boolean = false,
+    /** Which screen edge the volume side bar slides in from: "right" (next to a Galaxy's buttons) or "left". */
+    val volumeEdge: String = "right",
+    /** The phone's + / − buttons open Seelie's bar (once Seelie is on under Accessibility). Off = the phone's own. */
+    val volumeKeys: Boolean = true,
 )
 
 /** The saved quick-toggles setup (on the phone, Compose state, one shared store: like HomePrefs). */
@@ -68,6 +72,7 @@ class TogglePrefs private constructor(context: Context) {
                 put("backing", s.backing); put("cardLabel", s.cardLabel)
                 put("align", s.align); put("labels", s.labels); put("stateLine", s.stateLine)
                 put("volumeLook", s.volumeLook); put("volumeClick", s.volumeClick)
+                put("volumeEdge", s.volumeEdge); put("volumeKeys", s.volumeKeys)
             }.toString())
         }
     }
@@ -109,6 +114,8 @@ class TogglePrefs private constructor(context: Context) {
             stateLine = o.optBoolean("stateLine", d.stateLine),
             volumeLook = VolumeLook.byId(o.optString("volumeLook", d.volumeLook)).id,
             volumeClick = o.optBoolean("volumeClick", d.volumeClick),
+            volumeEdge = if (o.optString("volumeEdge", d.volumeEdge) == "left") "left" else "right",
+            volumeKeys = o.optBoolean("volumeKeys", d.volumeKeys),
         )
     } catch (e: Exception) {
         ToggleSetup()

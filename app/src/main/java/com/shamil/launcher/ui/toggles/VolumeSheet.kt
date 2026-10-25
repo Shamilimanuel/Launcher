@@ -13,7 +13,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -72,8 +74,9 @@ import kotlinx.coroutines.delay
 
 /*
  * Seelie's own volume (25 Oct, from a video he liked: "volume styles", colours that match the wallpaper, a little
- * sound). It lives inside Seelie: the Volume quick toggle opens it. The phone's own pop-up for the volume keys stays
- * (replacing it everywhere would need Accessibility access; he chose "inside Seelie first").
+ * sound). Since his "it doesn't come on the side bar" it's a side bar ([VolumeSideBar]); the phone's + / − buttons
+ * open it everywhere through [com.shamil.launcher.volume.SeelieVolumeService]. This host is the fallback on the home
+ * for the Volume toggle while that service is switched off.
  */
 
 /** The looks. The ids are saved (in the quick toggles setup, so a save keeps it), never rename them. */
@@ -145,71 +148,32 @@ fun BoxScope.VolumeSheetHost() {
             onDispose { runCatching { context.unregisterReceiver(receiver) } }
         }
         LaunchedEffect(touched) {
-            delay(4500)
+            delay(3000)
             VolumeSheet.open = false
         }
         BackHandler { VolumeSheet.open = false }
     }
 
-    AnimatedVisibility(VolumeSheet.open, enter = fadeIn(tween(180)), exit = fadeOut(tween(200))) {
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f))
-            .clickable(remember { MutableInteractionSource() }, null) { VolumeSheet.open = false })
-    }
+    // A tap anywhere else puts it away (no dark scrim: it's a slim bar, like the phone's own).
+    if (VolumeSheet.open) Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, null) { VolumeSheet.open = false })
+    val left = setup.volumeEdge == "left"
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     AnimatedVisibility(
         VolumeSheet.open,
-        modifier = Modifier.align(Alignment.BottomCenter),
-        enter = slideInVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) { it } + fadeIn(),
-        exit = slideOutVertically(tween(220)) { it } + fadeOut(),
+        modifier = Modifier.align(if (left) Alignment.TopStart else Alignment.TopEnd).padding(top = (screenH * 0.2f).dp, start = 10.dp, end = 10.dp),
+        enter = slideInHorizontally(spring(dampingRatio = 0.8f, stiffness = 500f)) { if (left) -it * 2 else it * 2 } + fadeIn(),
+        exit = slideOutHorizontally(tween(220)) { if (left) -it * 2 else it * 2 } + fadeOut(),
     ) {
-        val theme = LocalLauncherLook.current
-        val shape = RoundedCornerShape(28.dp)
-        Column(
-            Modifier
-                .navigationBarsPadding()
-                .padding(start = 14.dp, end = 14.dp, bottom = 16.dp)
-                .fillMaxWidth()
-                .clip(shape)
-                .background(theme.sheetTop.copy(alpha = 0.96f))
-                .border(1.dp, theme.accent.copy(alpha = 0.35f), shape)
-                .clickable(remember { MutableInteractionSource() }, null) {}   // taps inside don't close it
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(painterResource(R.drawable.ic_volume_up), null, tint = theme.accent, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Volume", style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, color = theme.accent, fontSize = 19.sp))
-                Spacer(Modifier.weight(1f))
-                Text("${(level * 100f / max.coerceAtLeast(1)).toInt()}%", style = TextStyle(fontFamily = theme.font, color = theme.textDim, fontSize = 14.sp))
-            }
-            Spacer(Modifier.height(16.dp))
-            VolumeSlider(level, max, look, onChange = { v ->
+        VolumeSideBar(level, max, look, ringer, left,
+            onChange = { v ->
                 touched++
                 if (v != level) {
                     runCatching { audio?.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0) }
                     if (setup.volumeClick) runCatching { audio?.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.4f) }
                     level = v
                 }
-            })
-            Spacer(Modifier.height(16.dp))
-            // Ring / Vibrate / Silent. Silent (and leaving it) can need Do Not Disturb access on newer Android.
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(AudioManager.RINGER_MODE_NORMAL to "Ring", AudioManager.RINGER_MODE_VIBRATE to "Vibrate", AudioManager.RINGER_MODE_SILENT to "Silent").forEach { (mode, name) ->
-                    val on = ringer == name
-                    Text(name,
-                        modifier = Modifier.clip(CircleShape)
-                            .background(if (on) theme.accent else theme.card)
-                            .clickable {
-                                touched++
-                                val ok = runCatching { audio?.ringerMode = mode }.isSuccess
-                                if (!ok) Toast.makeText(context, "Android needs Do Not Disturb access for that", Toast.LENGTH_SHORT).show()
-                                ringer = ToggleActions.ringer(context)
-                            }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        style = TextStyle(fontFamily = theme.font, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
-                            color = if (on) theme.sheet.copy(alpha = 1f) else theme.text))
-                }
-            }
-        }
+            },
+            onRinger = { touched++; ringer = cycleRinger(context) })
     }
 }
 

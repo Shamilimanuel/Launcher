@@ -148,12 +148,23 @@ fun ColumnScope.TogglesSettingsContent() {
     }
     Hint("The card matches your widget card: its style, see-through level, corners and border all follow Widgets → Card.")
 
-    SectionLabel("Volume button")
-    Hint("Tapping Volume opens Seelie's own slider in this look. The phone's volume keys still show the phone's pop-up.")
+    SectionLabel("Volume")
+    Hint("Seelie's side bar slides in from the edge when you press the phone's volume buttons, in any app, or tap Volume here.")
+    if (!com.shamil.launcher.volume.SeelieVolumeService.running) {
+        Hint("For the volume buttons, Android wants Seelie switched on under Accessibility → Installed apps → Seelie. " +
+            "Seelie only listens to the two volume buttons there, nothing else. With the screen off, during calls and while " +
+            "the phone rings, the phone's own volume stays.")
+        LinkChip("Turn on in Android settings") { ToggleActions.open(context, android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+    } else {
+        Choice("Volume buttons", listOf("seelie" to "Seelie's bar", "phone" to "Phone's own"), if (s.volumeKeys) "seelie" else "phone") { v -> prefs.change { it.copy(volumeKeys = v == "seelie") } }
+    }
     Choice("Look", VolumeLook.entries.take(3).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
     Choice("", VolumeLook.entries.drop(3).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
     if (s.volumeLook != VolumeLook.SYSTEM.id) {
-        VolumeSlider(9, 15, VolumeLook.byId(s.volumeLook), Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {}
+        Choice("Edge", listOf("right" to "Right", "left" to "Left"), s.volumeEdge) { v -> prefs.change { it.copy(volumeEdge = v) } }
+        Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), contentAlignment = if (s.volumeEdge == "left") Alignment.CenterStart else Alignment.CenterEnd) {
+            VolumeSideBar(9, 15, VolumeLook.byId(s.volumeLook), "Ring", s.volumeEdge == "left", onChange = {}, onRinger = {})
+        }
         Choice("Soft click on each step", ON_OFF, s.volumeClick.onOff()) { v -> prefs.change { it.copy(volumeClick = v == "on") } }
     }
 

@@ -1,4 +1,6 @@
 <resources>
     <string name="app_name">Seelie</string>
     <string name="settings_name">Seelie settings</string>
+    <string name="volume_service_name">Seelie volume buttons</string>
+    <string name="volume_service_about">Shows Seelie\'s own volume bar when you press the volume buttons. Seelie only listens to the two volume buttons: it does not read your screen or what you type. With the screen off, during calls and while the phone rings, the phone\'s own volume stays.</string>
 </resources>
