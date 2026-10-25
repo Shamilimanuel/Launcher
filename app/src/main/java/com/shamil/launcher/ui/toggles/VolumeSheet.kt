@@ -86,7 +86,11 @@ enum class VolumeLook(val id: String, val title: String) {
     LANTERN("lantern", "Lanterns"),
     ELEMENT("element", "Elements"),
     WALLPAPER("wallpaper", "Wallpaper colours"),
-    SYSTEM("system", "Phone's own");
+    SYSTEM("system", "Phone's own"),
+    STARS("stars", "Constellation"),
+    THREAD("thread", "Gold thread"),
+    PETALS("petals", "Falling petals"),
+    TRAIL("trail", "Seelie trail");
 
     companion object {
         fun byId(id: String?): VolumeLook = entries.firstOrNull { it.id == id } ?: GOLD
@@ -99,13 +103,6 @@ object VolumeSheet {
     /** How many screens draw the sheet right now (the home). Settings has none, so its Volume button uses the phone's. */
     var hosts by mutableIntStateOf(0)
 }
-
-// Element colours for the Elements look: calm hydro at low volume, anemo, geo, then pyro at the top.
-private val Hydro = Color(0xFF5BC0EB)
-private val Anemo = Color(0xFF74C2A8)
-private val Geo = Color(0xFFF0B232)
-private val Pyro = Color(0xFFF08A5D)
-private val Gold = Color(0xFFF3D79C)
 
 /** The sheet, over everything on the home. Closes on a tap outside, Back, or after a few quiet seconds. */
 @Composable
@@ -174,70 +171,5 @@ fun BoxScope.VolumeSheetHost() {
                 }
             },
             onRinger = { touched++; ringer = cycleRinger(context) })
-    }
-}
-
-/**
- * The slider in one of the [VolumeLook]s, 0..[max] steps. Drag or tap anywhere on it. Also used as the preview in
- * Quick toggles settings (with [onChange] doing nothing).
- */
-@Composable
-fun VolumeSlider(level: Int, max: Int, look: VolumeLook, modifier: Modifier = Modifier, onChange: (Int) -> Unit) {
-    val context = LocalContext.current
-    val theme = LocalLauncherLook.current
-    val wallpaper = LookStore.get(context).wallpaperLook
-    val fraction by animateFloatAsState(level.toFloat() / max.coerceAtLeast(1), spring(stiffness = 700f), label = "volume")
-    fun step(x: Float, width: Float) = ((x / width).coerceIn(0f, 1f) * max).let { kotlin.math.round(it).toInt() }
-    Canvas(
-        modifier
-            .fillMaxWidth()
-            .height(if (look == VolumeLook.LANTERN) 46.dp else 36.dp)
-            .pointerInput(max) { detectTapGestures { onChange(step(it.x, size.width.toFloat())) } }
-            .pointerInput(max) { detectHorizontalDragGestures { change, _ -> change.consume(); onChange(step(change.position.x, size.width.toFloat())) } }
-    ) {
-        val w = size.width
-        val h = size.height
-        val f = fraction
-        when (look) {
-            VolumeLook.LANTERN -> {
-                // A row of little lanterns: the lit ones glow warm, the rest wait dark.
-                val n = max.coerceIn(5, 25)
-                val gap = w / n
-                for (i in 0 until n) {
-                    val lit = (i + 0.5f) / n <= f
-                    val cx = gap * (i + 0.5f)
-                    if (lit) drawCircle(Brush.radialGradient(listOf(Color(0x99FFB45E), Color.Transparent), center = Offset(cx, h / 2), radius = gap * 0.9f), radius = gap * 0.9f, center = Offset(cx, h / 2))
-                    drawRoundRect(if (lit) Color(0xFFFFD58F) else Color.White.copy(alpha = 0.14f),
-                        topLeft = Offset(cx - gap * 0.22f, h * 0.22f), size = Size(gap * 0.44f, h * 0.56f), cornerRadius = CornerRadius(gap * 0.18f))
-                }
-            }
-            else -> {
-                val track = h * (if (look == VolumeLook.GLASS) 0.32f else 0.42f)
-                val top = (h - track) / 2
-                val r = CornerRadius(track / 2)
-                drawRoundRect(Color.White.copy(alpha = if (look == VolumeLook.GLASS) 0.12f else 0.1f), Offset(0f, top), Size(w, track), r)
-                val fill = when (look) {
-                    VolumeLook.GOLD -> Brush.horizontalGradient(listOf(Color(0xFFD3BC8E), Gold))
-                    VolumeLook.GLASS -> Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.55f), Color.White.copy(alpha = 0.9f)))
-                    VolumeLook.ELEMENT -> Brush.horizontalGradient(listOf(Hydro, Anemo, Geo, Pyro), endX = w)
-                    VolumeLook.WALLPAPER -> {
-                        val a = wallpaper?.accent ?: theme.accent
-                        Brush.horizontalGradient(listOf(lerp(a, Color.Black, 0.25f), a))
-                    }
-                    VolumeLook.SYSTEM, VolumeLook.LANTERN -> Brush.horizontalGradient(listOf(theme.accent, theme.accent))
-                }
-                if (f > 0f) drawRoundRect(fill, Offset(0f, top), Size(w * f, track), r)
-                // The thumb: a glowing orb (gold, elements, wallpaper) or a clean white pill (glass).
-                val x = (w * f).coerceIn(h / 2, w - h / 2)
-                val thumbColour = when (look) {
-                    VolumeLook.GLASS -> Color.White
-                    VolumeLook.ELEMENT -> lerp(lerp(Hydro, Anemo, (f * 3).coerceIn(0f, 1f)), lerp(Geo, Pyro, ((f - 0.66f) * 3).coerceIn(0f, 1f)), ((f - 0.33f) * 3).coerceIn(0f, 1f))
-                    VolumeLook.WALLPAPER -> wallpaper?.accent ?: theme.accent
-                    else -> Gold
-                }
-                drawCircle(Brush.radialGradient(listOf(thumbColour.copy(alpha = 0.45f), Color.Transparent), center = Offset(x, h / 2), radius = h * 0.75f), radius = h * 0.75f, center = Offset(x, h / 2))
-                drawCircle(thumbColour, radius = h * 0.32f, center = Offset(x, h / 2))
-            }
-        }
     }
 }

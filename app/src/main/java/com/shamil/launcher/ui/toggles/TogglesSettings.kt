@@ -158,8 +158,9 @@ fun ColumnScope.TogglesSettingsContent() {
     } else {
         Choice("Volume buttons", listOf("seelie" to "Seelie's bar", "phone" to "Phone's own"), if (s.volumeKeys) "seelie" else "phone") { v -> prefs.change { it.copy(volumeKeys = v == "seelie") } }
     }
-    Choice("Look", VolumeLook.entries.take(3).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
-    Choice("", VolumeLook.entries.drop(3).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
+    Choice("Look", listOf(VolumeLook.GOLD, VolumeLook.STARS, VolumeLook.THREAD).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
+    Choice("", listOf(VolumeLook.PETALS, VolumeLook.TRAIL, VolumeLook.LANTERN).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
+    Choice("More", listOf(VolumeLook.GLASS.id to "Glass", VolumeLook.ELEMENT.id to "Elements", VolumeLook.WALLPAPER.id to "Wallpaper", VolumeLook.SYSTEM.id to "Phone's own"), s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
     if (s.volumeLook != VolumeLook.SYSTEM.id) {
         Choice("Edge", listOf("right" to "Right", "left" to "Left"), s.volumeEdge) { v -> prefs.change { it.copy(volumeEdge = v) } }
         Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), contentAlignment = if (s.volumeEdge == "left") Alignment.CenterStart else Alignment.CenterEnd) {
