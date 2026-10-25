@@ -185,6 +185,7 @@ private val START_PAGES = mapOf(
     SeelieSettings.PAGE_CLOCK to listOf(Spot(Node.Clock, Node.Clock.tabOf("Clock"))),
     SeelieSettings.PAGE_WIDGETS to listOf(Spot(Node.Widgets, Node.Widgets.tabOf("Stack"))),
     SeelieSettings.PAGE_WIDGET_PICKER to listOf(Spot(Node.Widgets, Node.Widgets.tabOf("Stack")), Spot(picker = true)),
+    SeelieSettings.PAGE_NIGHT to listOf(Spot(Node.Clock, Node.Clock.tabOf("Night screen"))),
 )
 
 /** One line under each theme's name, from the prototype. */
@@ -314,6 +315,7 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
                 HomeStyleSettingsContent(part = "touch")
                 LayoutSettingsContent(part = "touches")
             }
+            "Night screen" -> NightScreenSettings()
         }
         Node.Widgets -> when (tab) {
             "Stack" -> {
@@ -454,6 +456,25 @@ private fun GlanceShows() {
     Choice("Hide event titles", ON_OFF, home.hideEventTitles.onOff(), enabled = home.showEvent) { home.useHideEventTitles(it == "on") }
     Hint("On: the event line and the agenda say \"Event at 18:00\" instead of what the event is.")
     GroupCard(R.drawable.ic_location_on, Geo, "Weather city", "Comes from your rough location for now", soon = true)
+}
+
+/**
+ * The night screen, first test (25 Oct): Seelie's screen saver for the charger. Android has no way for an app to start
+ * a screen saver itself, so there's no "Preview now" here: the phone's own Screen saver page has Preview / Start now.
+ */
+@Composable
+private fun NightScreenSettings() {
+    val context = LocalContext.current
+    Hint("Shows while charging. Choose Seelie under Screen saver; this is a first test.")
+    GroupCard(R.drawable.ic_clear_night, Cryo, "Choose Seelie as screen saver", "Opens the phone's Screen saver page") {
+        // Samsung keeps it under Display > Screen saver; if this phone has no such page, open Display instead.
+        val dream = android.content.Intent(android.provider.Settings.ACTION_DREAM_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        val display = android.content.Intent(android.provider.Settings.ACTION_DISPLAY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { context.startActivity(dream) }.isFailure) runCatching { context.startActivity(display) }
+    }
+    SectionLabel("Good to know")
+    GroupInfo(R.drawable.ic_visibility, Geo, "To see it now", "Seelie can't start a screen saver itself (Android doesn't allow it). On the Screen saver page, tap Preview, or plug in the charger and let the screen time out.")
+    GroupInfo(R.drawable.ic_touch_app, Hydro, "Swipe, don't tap to leave", "Touching it doesn't close it, so you can swipe between the two pages. Leave with the ✕ in the corner, Back, or the power button.")
 }
 
 /** A card that says where something lives, without a › (it isn't a page in settings). */

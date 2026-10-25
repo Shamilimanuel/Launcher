@@ -112,7 +112,7 @@ import kotlin.math.sin
 /** A part of Seelie with its own settings page: its name, one line of what's inside, its icon, and its tabs (empty = one page). */
 internal enum class Node(val title: String, val sub: String, @DrawableRes val icon: Int, val tint: Color, val tabs: List<String>) {
     Background("Background", "Wallpaper, living background, scene, fade", R.drawable.ic_wallpaper, Anemo, listOf("Wallpaper", "Living", "Scene", "Fade")),
-    Clock("Clock & date", "Clock, date, the line under it, spacing", R.drawable.ic_schedule, Geo, listOf("Clock", "Date", "Glance line", "Spacing")),
+    Clock("Clock & date", "Clock, date, the line under it, spacing, night screen", R.drawable.ic_schedule, Geo, listOf("Clock", "Date", "Glance line", "Spacing", "Night screen")),
     Widgets("Widgets", "Stack, card look, stats", R.drawable.ic_widgets, Pyro, listOf("Stack", "Card", "Stats")),
     Music("Music card", "Card, cover art, controls", R.drawable.ic_music_note, Electro, listOf("Card", "Cover", "Controls")),
     Favourites("Favourites", "List, apps, notifications, quick toggles", R.drawable.ic_star, Hydro, listOf("List", "Apps", "Notifications", "Toggles")),

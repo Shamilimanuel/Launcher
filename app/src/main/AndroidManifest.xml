@@ -149,6 +149,34 @@
                 android:resource="@xml/seelie_lock_service" />
         </service>
 
+        <!--
+            Seelie's night screen (25 Oct, first test): a screen saver ("dream") the phone shows by itself while
+            charging, once he picks it under Settings > Display > Screen saver. Only the system can start it
+            (BIND_DREAM_SERVICE), so exported is safe.
+        -->
+        <service
+            android:name=".night.SeelieDream"
+            android:exported="true"
+            android:label="@string/dream_name"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.dream"
+                android:resource="@xml/seelie_dream" />
+        </service>
+        <!--
+            The gear on the phone's Screen saver page opens this: Seelie settings straight on the night screen tab.
+            Not exported: only the phone's own Settings app (a system app) may open it.
+        -->
+        <activity-alias
+            android:name=".settings.NightSettings"
+            android:exported="false"
+            android:label="@string/dream_name"
+            android:targetActivity=".settings.SettingsActivity" />
+
         <service
             android:name=".notify.SeelieNotificationListener"
             android:exported="true"

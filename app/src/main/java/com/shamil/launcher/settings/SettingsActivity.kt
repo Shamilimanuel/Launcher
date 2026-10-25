@@ -36,9 +36,12 @@ class SettingsActivity : ComponentActivity(), WidgetSetupResults {
             overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, R.anim.seelie_hold, R.anim.seelie_fade_out)
         }
         val looks = LookStore.get(this)
+        // Opened through the NightSettings alias (the gear on the phone's Screen saver page): start on the night screen tab.
+        val startAt = intent.getStringExtra(SeelieSettings.EXTRA_PAGE)
+            ?: SeelieSettings.PAGE_NIGHT.takeIf { intent.component?.className?.endsWith(".NightSettings") == true }
         setContent {
             LauncherTheme(look = animatedLook(looks.look)) {
-                SettingsApp(looks = looks, startAt = intent.getStringExtra(SeelieSettings.EXTRA_PAGE), onClose = ::finish)
+                SettingsApp(looks = looks, startAt = startAt, onClose = ::finish)
             }
         }
     }

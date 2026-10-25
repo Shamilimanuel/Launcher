@@ -12,6 +12,7 @@ object SeelieSettings {
     const val PAGE_CLOCK = "clock"
     const val PAGE_WIDGETS = "widgets"
     const val PAGE_WIDGET_PICKER = "widget_picker"
+    const val PAGE_NIGHT = "night"
     internal const val EXTRA_PAGE = "page"
 
     /** Opens settings on its top page, or straight on [page] (one of the PAGE_ names). */

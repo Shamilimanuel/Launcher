@@ -62,6 +62,7 @@ internal val SETTINGS_INDEX = listOf(
     hit("Spacing: clock, date, line, widget, left edge", Node.Clock, "Spacing", "spacing ruimte afstand gap tussenruimte edge rand margin marge"),
     hit("Seelie spirit: breathing colon + sparkle", Node.Clock, "Spacing", "spirit geest colon dubbelepunt breathing ademen touch"),
     hit("Sparkles by the clock", Node.Clock, "Spacing", "sparkles sterretjes glitter twinkle fonkelen"),
+    hit("Night screen while charging (test)", Node.Clock, "Night screen", "night nacht screen saver schermbeveiliging standby dream charging opladen bedside nachtkastje dock clock klok", R.drawable.ic_clear_night, Cryo),
 
     // ---- Widgets
     hit("Widget stack: order, size, remove", Node.Widgets, "Stack", "widget widgets stack stapel order volgorde remove verwijderen size grootte reset calendar kalender month maand gauges meters notes notities week"),

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Seelie's night screen (screen saver), 25 Oct test.
+    settingsActivity: the gear next to "Seelie night screen" on the phone's Screen saver page opens Seelie settings
+    on the night screen tab (the NightSettings alias in the manifest).
+    showClockAndComplications=false: on phones that lay their own clock/weather over a screen saver (Pixel, Android 13+),
+    keep them off, Seelie draws its own.
+-->
+<dream xmlns:android="http://schemas.android.com/apk/res/android"
+    android:settingsActivity="com.shamil.launcher/.settings.NightSettings"
+    android:showClockAndComplications="false" />
