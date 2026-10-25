@@ -17,15 +17,18 @@ import android.widget.Toast
 /**
  * Opens [intent]; returns false (instead of crashing) when nothing on the phone can open it.
  * From outside an Activity Android needs NEW_TASK, so that's added only then.
+ * Through the lock (25 Oct, audit S2): when the app that answers is locked or in the vault, its code comes first.
  */
 internal fun startSafely(context: Context, intent: Intent): Boolean {
     if (context !is Activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    return try {
-        context.startActivity(intent)
-        true
-    } catch (e: Exception) {
-        // ActivityNotFoundException (no app for it) or SecurityException (a screen we may not open).
-        false
+    return com.shamil.launcher.apps.Apps.openIntent(context, intent) {
+        try {
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            // ActivityNotFoundException (no app for it) or SecurityException (a screen we may not open).
+            false
+        }
     }
 }
 

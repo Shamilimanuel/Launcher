@@ -90,6 +90,8 @@ fun AppMenuSheet(
     /** Locks or unlocks the app (stays visible, asks the code to open). */
     isLocked: Boolean = false,
     onToggleLock: () -> Unit = {},
+    /** Uninstall; null = Android's "Uninstall this app?" straight away. The home asks a locked app's code first (25 Oct). */
+    onUninstall: (() -> Unit)? = null,
 ) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
@@ -172,7 +174,7 @@ fun AppMenuSheet(
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp))
                 }
             } else {
-                Card(R.drawable.ic_delete, "Uninstall", null, color = Warn) { closeThen { Apps.uninstall(context, app) } }
+                Card(R.drawable.ic_delete, "Uninstall", null, color = Warn) { closeThen { onUninstall?.invoke() ?: Apps.uninstall(context, app) } }
             }
 
             GroupLabel("Seelie")

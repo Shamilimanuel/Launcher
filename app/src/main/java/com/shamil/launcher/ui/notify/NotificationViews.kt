@@ -131,7 +131,8 @@ fun NotificationLine(
     // A locked app never shows its messages on the home screen; opening them asks for the code.
     val locked = vault.isLocked(packageName)
     val showText = prefs.showText && !locked
-    val expand = { if (locked) vault.guard(packageName, "Notifications", onExpand) else onExpand() }
+    // askCode, not guard (25 Oct): opening the card isn't opening the app, so the lock watcher must still lock the app itself.
+    val expand = { if (locked) vault.askCode(packageName, "Notifications", onExpand) else onExpand() }
     val now by rememberNow()
     val age = if (showAge) ago(newest.postTime, now) else null
 

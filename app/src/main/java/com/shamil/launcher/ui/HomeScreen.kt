@@ -204,9 +204,10 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     // His favourites, in his order, matched to the installed apps (uninstalled ones are skipped).
     // Pinned shortcuts (websites from "Add to home screen") can be favourites too, stored as "shortcut:<package>/<id>".
     val pinned = rememberPinnedShortcuts()
-    val favouriteApps = remember(outsideVault, favourites.packages, pinned) {
+    val favouriteApps = remember(outsideVault, favourites.packages, pinned, vault.apps) {
         favourites.packages.mapNotNull { key ->
-            if (key.startsWith(SHORTCUT_KEY)) pinned.firstOrNull { it.favouriteKey == key }
+            // A shortcut whose app is in the vault vanishes too (25 Oct, audit S3).
+            if (key.startsWith(SHORTCUT_KEY)) pinned.firstOrNull { it.favouriteKey == key && it.component.packageName !in vault }
             else outsideVault.firstOrNull { it.component.packageName == key }
         }
     }
@@ -248,6 +249,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     val popups = remember { PopupHolder() }
     LaunchedEffect(listLetter, state.searching) { popups.close() }
     BackHandler(enabled = popups.openKey != null) { popups.close() }
+    // Seelie stopped (or the vault locked again): an open shortcut pop-up closes, so a locked app's shortcuts don't
+    // wait there for the next person (25 Oct, audit S6). The swipe-left chooser closes below too.
+    LaunchedEffect(vault.lockedAgain) { popups.close() }
 
     // The app whose menu is open (long-press), or null.
     var lockPick by remember { mutableStateOf<AppEntry?>(null) }
@@ -257,6 +261,11 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     BackHandler(enabled = vaultOpen) { vault.lock(); vaultOpen = false }
     // The "swipe left" chooser for one app (or null).
     var gestureApp by remember { mutableStateOf<AppEntry?>(null) }
+    LaunchedEffect(vault.lockedAgain) { gestureApp = null }
+    // The chooser lists the app's shortcuts (often chat names): a locked app asks its code first (25 Oct, audit S6).
+    val chooseGesture = { app: AppEntry -> vault.askCode(app.component.packageName, app.label) { gestureApp = app } }
+    // No screenshots or screen recording of the vault, the lock screen or the PIN pad (25 Oct, audit S14).
+    SecureWhile(vaultOpen || vault.pending != null)
     // The "Seelie widget" sheet (long-press beside the clock).
     var widgetSheet by remember { mutableStateOf(false) }
     val openMenu = { app: AppEntry -> menuApp = app }
@@ -295,7 +304,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
 
     // BoxWithConstraints tells us the screen size, so positions can be a share of the height like in the notes.
     // Rows anywhere below can open the chooser (a left swipe on an app with no action yet).
-    CompositionLocalProvider(LocalGestureChooser provides { app: AppEntry -> gestureApp = app }, LocalPopupHolder provides popups) {
+    CompositionLocalProvider(LocalGestureChooser provides chooseGesture, LocalPopupHolder provides popups) {
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
@@ -599,9 +608,12 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     // Lock with code, when he has more than one code: which one opens this app?
     lockPick?.let { app ->
         LockCodePicker(vault, app.label, onPick = { code ->
-            vault.setLocked(app.component.packageName, true, code)
             lockPick = null
-            Toast.makeText(context, "${app.label} is locked with your ${code.title.lowercase()}", Toast.LENGTH_SHORT).show()
+            // Changing the code of an app that's already locked needs its current code first (25 Oct, audit S1).
+            vault.askCode(app.component.packageName, app.label) {
+                vault.setLocked(app.component.packageName, true, code)
+                Toast.makeText(context, "${app.label} is locked with your ${code.title.lowercase()}", Toast.LENGTH_SHORT).show()
+            }
         }, onDismiss = { lockPick = null })
     }
     menuApp?.takeIf { it.shortcutId == null }?.let { app ->
@@ -616,29 +628,56 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 onListLetter(null)
                 state.editingFavourites = true
             },
-            onToggleHidden = { tweaks.setHidden(pkg, !tweaks.isHidden(pkg)) },
+            // A locked app asks its code before Hide, Move to vault, Unlock and Uninstall (25 Oct, audit S1).
+            // askCode only asks for locked apps; the others go straight through.
+            onToggleHidden = { vault.askCode(pkg, app.label) { tweaks.setHidden(pkg, !tweaks.isHidden(pkg)) } },
             onRename = { tweaks.rename(pkg, it) },
             onDismiss = { menuApp = null },
-            onSwipeLeft = { gestureApp = app },
+            onSwipeLeft = { chooseGesture(app) },
             onMoveToVault = {
-                vault.add(pkg)
-                // First time: open the vault so he makes his PIN right away.
-                if (!vault.hasPin) vaultOpen = true
-                else Toast.makeText(context, "${app.label} is in the vault · hold • to open it", Toast.LENGTH_SHORT).show()
+                vault.askCode(pkg, app.label) {
+                    vault.add(pkg)
+                    // First time: open the vault so he makes his PIN right away.
+                    if (!vault.hasPin) vaultOpen = true
+                    else Toast.makeText(context, "${app.label} is in the vault · hold • to open it", Toast.LENGTH_SHORT).show()
+                }
             },
             isLocked = vault.isLocked(pkg),
             onToggleLock = {
                 val on = !vault.isLocked(pkg)
                 // More than one code made: he picks which one opens it.
                 if (on && vault.madeCodes.size > 1) lockPick = app
-                else {
-                    vault.setLocked(pkg, on)
+                else if (!on) {
+                    // Unlock: only with the app's own code.
+                    vault.askCode(pkg, app.label) {
+                        vault.setLocked(pkg, false)
+                        Toast.makeText(context, "${app.label} is unlocked", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    vault.setLocked(pkg, true)
                     // No code yet: make one first (the vault's setup screen).
-                    if (on && !vault.hasPin) vaultOpen = true
-                    else Toast.makeText(context, if (on) "${app.label} is locked" else "${app.label} is unlocked", Toast.LENGTH_SHORT).show()
+                    if (!vault.hasPin) vaultOpen = true
+                    else Toast.makeText(context, "${app.label} is locked", Toast.LENGTH_SHORT).show()
                 }
             },
+            onUninstall = { vault.askCode(pkg, app.label) { Apps.uninstall(context, app) } },
         )
+    }
+}
+
+/**
+ * While [on]: Android's "secure" flag on Seelie's window, so screenshots, screen recording and the recent-apps picture
+ * show black instead of the vault, a lock screen or the PIN pad (25 Oct, audit S14). Off again as soon as they close.
+ */
+@Composable
+private fun SecureWhile(on: Boolean) {
+    val context = LocalContext.current
+    DisposableEffect(on) {
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        val window = (c as? android.app.Activity)?.window
+        if (on) window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        onDispose { if (on) window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE) }
     }
 }
 
@@ -746,11 +785,19 @@ private fun MakeDefaultButton(modifier: Modifier = Modifier) {
     }
 }
 
-/** Opens another app's screen; quietly does nothing if no app on the phone can handle it. */
+/**
+ * Opens another app's screen; quietly does nothing if no app on the phone can handle it. Through the lock (25 Oct,
+ * audit S2): a locked or vault clock or calendar app asks for its code first (see [Apps.openIntent]).
+ */
 internal fun openSafely(context: Context, intent: Intent) {
-    try {
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    } catch (e: Exception) {
-        // No app on the phone handles this (e.g. no calendar app installed).
+    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    Apps.openIntent(context, intent) {
+        try {
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            // No app on the phone handles this (e.g. no calendar app installed).
+            false
+        }
     }
 }

@@ -1,19 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+   What Android 12+ may copy: to Google backup (cloud-backup) and to a new phone (device-transfer).
+   The same files are kept out of both (25 Oct audit, S4); backup_rules.xml says what each one holds.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="sharedpref" path="vault.xml"/>
+        <exclude domain="sharedpref" path="launcher.xml"/>
+        <exclude domain="sharedpref" path="quick_notes.xml"/>
+        <exclude domain="sharedpref" path="safe_mode.xml"/>
+        <exclude domain="sharedpref" path="launch_stats.xml"/>
+        <exclude domain="file" path="app-cache"/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="sharedpref" path="vault.xml"/>
+        <exclude domain="sharedpref" path="launcher.xml"/>
+        <exclude domain="sharedpref" path="quick_notes.xml"/>
+        <exclude domain="sharedpref" path="safe_mode.xml"/>
+        <exclude domain="sharedpref" path="launch_stats.xml"/>
+        <exclude domain="file" path="app-cache"/>
     </device-transfer>
-    -->
 </data-extraction-rules>

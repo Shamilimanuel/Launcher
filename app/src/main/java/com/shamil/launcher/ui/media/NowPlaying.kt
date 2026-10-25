@@ -92,8 +92,14 @@ class NowPlaying internal constructor(
     fun previous() { runCatching { controls.skipToPrevious() } }
     fun seekTo(ms: Long) { runCatching { controls.seekTo(ms.coerceAtLeast(0L)) } }
 
-    /** Opens the music app, on its own "now playing" screen when it offers one. */
-    fun open(context: Context) {
+    /**
+     * Opens the music app, on its own "now playing" screen when it offers one. Through the lock (25 Oct, audit S2):
+     * a locked or vault music app asks for its code first.
+     */
+    fun open(context: Context) =
+        com.shamil.launcher.apps.VaultStore.get(context).guard(packageName, appLabel) { openNow(context) }
+
+    private fun openNow(context: Context) {
         val screen = controller.sessionActivity
         if (screen != null) {
             val opened = runCatching {

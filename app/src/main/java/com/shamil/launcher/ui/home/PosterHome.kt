@@ -378,7 +378,5 @@ private val SCRIM = Color(0xFF060814)
 private const val PREFS = "poster_home"
 private const val KEY_HINTS = "hints_shown"
 
-/** Opens [intent], or quietly does nothing when no app on the phone handles it. */
-private fun openOrNothing(context: Context, intent: Intent) {
-    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-}
+/** Opens [intent], or quietly does nothing when no app on the phone handles it. A locked clock or calendar asks its code (25 Oct). */
+private fun openOrNothing(context: Context, intent: Intent) = com.shamil.launcher.ui.openSafely(context, intent)

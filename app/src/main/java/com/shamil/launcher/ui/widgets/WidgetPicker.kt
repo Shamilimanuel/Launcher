@@ -99,10 +99,13 @@ fun ColumnScope.AppWidgetPickerContent(onAdded: () -> Unit) {
     val density = context.resources.displayMetrics.density
 
     // The apps and how many widgets each has. Quick: no preview pictures yet (those load when an app is opened).
-    val apps by produceState<List<PickerApp>?>(null) {
+    // Apps hidden in the vault are left out, so they don't show here or in Suggestions (25 Oct, audit S5).
+    val vaultApps = remember { com.shamil.launcher.apps.VaultStore.get(context) }.apps
+    val apps by produceState<List<PickerApp>?>(null, vaultApps) {
         value = withContext(Dispatchers.Default) {
             val pm = context.packageManager
-            SeelieWidgetHost.providers(context).groupBy { it.provider.packageName }.map { (pkg, widgets) ->
+            SeelieWidgetHost.providers(context).filter { it.provider.packageName !in vaultApps }
+                .groupBy { it.provider.packageName }.map { (pkg, widgets) ->
                 val info = runCatching { pm.getApplicationInfo(pkg, 0) }.getOrNull()
                 PickerApp(
                     pkg = pkg,

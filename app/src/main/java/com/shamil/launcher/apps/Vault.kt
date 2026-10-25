@@ -128,13 +128,28 @@ class VaultStore private constructor(context: Context) {
         private set
 
     /**
-     * Runs [open] straight away, or (for a locked app) first asks for the code. Every way an app opens goes through here:
-     * a tap, search, a gesture, a shortcut, a notification.
+     * Runs [open] straight away, or (for a locked app, or an app hidden in the vault) first asks for the code. Every way
+     * an app opens goes through here: a tap, search, a gesture, a shortcut, a notification, the clock and date.
+     * Vault apps ask for the vault's code (25 Oct audit: before, only locked apps were checked). The vault screen still
+     * opens its own apps straight away, because it does so while it's unlocked.
      */
     fun guard(packageName: String, label: String, open: () -> Unit) {
-        if (packageName !in locked || !hasPin || unlocked) { pass(packageName); open() }
-        else pending = PendingOpen(label, lockCodeOf(packageName), open, packageName)
+        if (!guardsFromOutside(packageName) || unlocked) { pass(packageName); open() }
+        else pending = PendingOpen(label, codeFor(packageName), open, packageName)
     }
+
+    /**
+     * Asks [packageName]'s code before a change to it (25 Oct audit: Unlock, picking its code, Hide, Move to vault,
+     * Uninstall, its shortcuts), then runs [action]. Unlike [guard] it does NOT mark the app as opened the right way,
+     * so the lock watcher still locks it if it comes to the front. Apps without a lock just run [action].
+     */
+    fun askCode(packageName: String, label: String, action: () -> Unit) {
+        if (!guardsFromOutside(packageName) || unlocked) action()
+        else pending = PendingOpen(label, codeFor(packageName), action)
+    }
+
+    /** The code a guarded app asks for: a locked app its own pick, a vault app the vault's code. */
+    private fun codeFor(packageName: String): LockCode = if (packageName in locked) lockCodeOf(packageName) else vaultCode
 
     /** The code was right: open the waiting app, and lock again straight after. */
     fun finishPending() {
@@ -167,7 +182,7 @@ class VaultStore private constructor(context: Context) {
 
     /** A guarded app came to the front by itself: ask for its code (a vault app: the vault's code), then [open] it. */
     fun askFromOutside(packageName: String, label: String, open: () -> Unit) {
-        pending = PendingOpen(label, if (packageName in locked) lockCodeOf(packageName) else vaultCode, open, packageName)
+        pending = PendingOpen(label, codeFor(packageName), open, packageName)
     }
 
     fun cancelPending() {
@@ -293,15 +308,31 @@ class VaultStore private constructor(context: Context) {
         unlocked = true
     }
 
-    /** The fingerprint check passed (Android did it): unlock. */
+    /**
+     * The vault's own code screen is showing (memory only; set by the vault screen while it asks). With [pending] it
+     * tells a fingerprint that is still wanted apart from a stale one.
+     */
+    var vaultAsking = false
+
+    /**
+     * The fingerprint check passed (Android did it): unlock. Only when something is waiting for it (25 Oct audit): the
+     * vault's code screen or a locked app. A late success with nothing waiting would leave [unlocked] on, and then every
+     * locked app would open without its code until Seelie stops.
+     */
     fun unlockWithFingerprint() {
+        if (pending == null && !vaultAsking) return
         wrongTries = 0
         unlocked = true
     }
 
+    /** Goes up every time the vault locks again (Seelie stops, the vault closes): open notification cards and shortcut pop-ups of locked apps close on it. */
+    var lockedAgain by mutableIntStateOf(0)
+        private set
+
     fun lock() {
         unlocked = false
         gameOk = false
+        lockedAgain++
     }
 
     fun useFingerprint(on: Boolean) {

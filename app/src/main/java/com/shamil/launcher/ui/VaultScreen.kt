@@ -49,6 +49,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -277,6 +278,15 @@ private fun PasswordLayout(
  */
 @Composable
 private fun Unlock(vault: VaultStore, title: String = "Vault", code: LockCode? = null) {
+    // While a code screen shows, a fingerprint is wanted; once it goes (opened, ✕, Back, Seelie stops) the prompt is
+    // called off. code == null is the vault's own screen: it tells VaultStore the vault is waiting (25 Oct, audit S13).
+    DisposableEffect(Unit) {
+        if (code == null) vault.vaultAsking = true
+        onDispose {
+            if (code == null) vault.vaultAsking = false
+            stopFingerprint()
+        }
+    }
     val kind = FunLockKind.byId(vault.gameKind)
     val wantsGame = kind != null && (code == null || code == LockCode.FUN)
     var game by remember { mutableStateOf(true) }
@@ -343,6 +353,9 @@ fun LockGate(label: String, code: LockCode) {
     BackHandler { vault.cancelPending() }
     // The code was right: open the app (once).
     LaunchedEffect(vault.unlocked) { if (vault.unlocked) vault.finishPending() }
+    // Nothing waiting any more (opened, cancelled, Seelie stopped) while this screen still fades out: call off the
+    // fingerprint prompt now, not after the fade (25 Oct, audit S13).
+    LaunchedEffect(vault.pending == null) { if (vault.pending == null) stopFingerprint() }
     Box(
         Modifier
             .fillMaxSize()
@@ -440,17 +453,37 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
     )
 }
 
+/**
+ * The open fingerprint prompt's "stop" handle (25 Oct, audit S13): kept, so the prompt is called off when its code
+ * screen goes away ([stopFingerprint]) instead of lingering and unlocking later with nothing waiting.
+ */
+private var fingerprintSignal: CancellationSignal? = null
+
+/** Calls off the open fingerprint prompt, if any. */
+private fun stopFingerprint() {
+    fingerprintSignal?.let { runCatching { it.cancel() } }
+    fingerprintSignal = null
+}
+
 /** Android's fingerprint prompt; success unlocks the vault ("Use code" closes it, back to typing). */
 private fun askFingerprint(context: android.content.Context, vault: VaultStore, title: String = "Vault") {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
     val executor = context.mainExecutor
+    // Only one prompt at a time: a new one calls off the old one.
+    stopFingerprint()
+    val signal = CancellationSignal().also { fingerprintSignal = it }
     runCatching {
         BiometricPrompt.Builder(context)
             .setTitle(if (title == "Vault") "Open your vault" else "Open $title")
             .setNegativeButton("Use code", executor) { _, _ -> }
             .build()
-            .authenticate(CancellationSignal(), executor, object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) = vault.unlockWithFingerprint()
+            .authenticate(signal, executor, object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult?) {
+                    // A prompt that was called off doesn't count; VaultStore also ignores it with nothing waiting.
+                    if (signal.isCanceled) return
+                    if (fingerprintSignal === signal) fingerprintSignal = null
+                    vault.unlockWithFingerprint()
+                }
             })
     }
 }

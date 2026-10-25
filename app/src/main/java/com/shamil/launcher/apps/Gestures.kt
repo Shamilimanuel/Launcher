@@ -88,7 +88,9 @@ class GestureStore private constructor(context: Context) {
                 }
                 is SwipeAction.OpenApp -> {
                     val component = ComponentName.unflattenFromString(action.component) ?: return false
-                    VaultStore.get(context).guard(component.packageName, app.label) {
+                    // Through the lock: a locked app or a vault app asks for its code (guard checks both since 25 Oct).
+                    // The lock screen names the app that opens, not the one he swiped.
+                    VaultStore.get(context).guard(component.packageName, action.label) {
                         runCatching { context.getSystemService(LauncherApps::class.java).startMainActivity(component, Process.myUserHandle(), null, null) }
                         LaunchStats.get(context).record(component.packageName)
                     }

@@ -464,10 +464,12 @@ private fun RoundIcon(icon: Int, label: String, filled: Boolean, onClick: () -> 
 internal fun rememberFavouriteApps(): List<AppEntry> {
     val context = LocalContext.current
     val favs = remember { Favourites(context) }.packages
-    val apps by produceState(emptyList<AppEntry>(), favs) {
+    // Vault apps stay out of the previews, like on the real home (25 Oct, audit S5).
+    val vaultApps = remember { com.shamil.launcher.apps.VaultStore.get(context) }.apps
+    val apps by produceState(emptyList<AppEntry>(), favs, vaultApps) {
         value = withContext(Dispatchers.IO) {
             val all = AppCache(context.applicationContext).readIndex()
-            favs.mapNotNull { pkg -> all.firstOrNull { it.component.packageName == pkg } }
+            favs.filter { it !in vaultApps }.mapNotNull { pkg -> all.firstOrNull { it.component.packageName == pkg } }
         }
     }
     return apps

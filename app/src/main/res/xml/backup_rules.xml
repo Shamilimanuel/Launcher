@@ -1,13 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample backup rules file; uncomment and customize as necessary.
-   See https://developer.android.com/guide/topics/data/autobackup
-   for details.
-   Note: This file is ignored for devices older than API 31
-   See https://developer.android.com/about/versions/12/backup-restore
+   What Android's backup (Google backup, Android 11 and older) may copy. See data_extraction_rules.xml for Android 12+.
+   Kept out (25 Oct audit, S4): anything that says which apps are in the vault, the code hashes, his notes and crash notes.
+   - vault.xml: vault and locked apps, which code opens each, the salted code hashes and the PIN length
+   - launcher.xml: favourites, hidden apps and his renames
+   - quick_notes.xml: his quick notes from search
+   - safe_mode.xml: the last crash note
+   - launch_stats.xml: which apps he opens most (vault apps included)
+   - app-cache: the saved app list and icons (only a cache, rebuilt on its own)
+   His looks (saves/), wallpaper copies and the other look settings still go along: no vault data in those.
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <exclude domain="sharedpref" path="vault.xml"/>
+    <exclude domain="sharedpref" path="launcher.xml"/>
+    <exclude domain="sharedpref" path="quick_notes.xml"/>
+    <exclude domain="sharedpref" path="safe_mode.xml"/>
+    <exclude domain="sharedpref" path="launch_stats.xml"/>
+    <exclude domain="file" path="app-cache"/>
 </full-backup-content>

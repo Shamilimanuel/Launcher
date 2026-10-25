@@ -54,6 +54,7 @@ import com.shamil.launcher.R
 import com.shamil.launcher.apps.AppEntry
 import com.shamil.launcher.apps.AppShortcut
 import com.shamil.launcher.apps.Apps
+import com.shamil.launcher.apps.VaultStore
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,10 @@ fun AppItem(
     val notifs = if (showNotifications) rememberAppNotifications()[app.component.packageName].orEmpty() else emptyList()
     var notifOpen by remember { mutableStateOf(false) }
     var armed by remember { mutableStateOf(false) }
+    val vault = remember { VaultStore.get(context) }
+    // Seelie stopped (or the vault locked again): a locked app's open card (full messages + reply) closes, so the
+    // next person to pick up the phone doesn't find it open (25 Oct, audit S10).
+    LaunchedEffect(vault.lockedAgain) { if (vault.guardsFromOutside(app.component.packageName)) notifOpen = false }
 
     Column {
       Box(contentAlignment = Alignment.CenterEnd) {
@@ -146,7 +151,9 @@ fun AppItem(
                             val pulled = dragX
                             when {
                                 pulled > openAt -> {
-                                    if (popupOpen) popups.close() else popups.openKey = app.key
+                                    // A locked app's shortcuts (often chat names) show only after its code (25 Oct, audit S6).
+                                    if (popups.openKey == app.key) popups.close()
+                                    else vault.askCode(app.component.packageName, app.label) { popups.openKey = app.key }
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }
                                 popupOpen && pulled < 0 -> popups.close()
@@ -204,6 +211,9 @@ private fun ShortcutsPopup(app: AppEntry, onClose: () -> Unit, modifier: Modifie
     val look = LocalLauncherLook.current
     var loaded by remember { mutableStateOf(false) }
     var shortcuts by remember { mutableStateOf<List<AppShortcut>?>(emptyList()) }
+    // A locked app's pop-up only opens after its code (see AppItem) and closes when Seelie stops: its shortcuts open
+    // without asking a second time.
+    val codeGiven = remember(app.key) { VaultStore.get(context).guardsFromOutside(app.component.packageName) }
     LaunchedEffect(app.key) {
         shortcuts = withContext(Dispatchers.Default) { Apps.shortcuts(context, app) }
         loaded = true
@@ -227,7 +237,7 @@ private fun ShortcutsPopup(app: AppEntry, onClose: () -> Unit, modifier: Modifie
                         .fillMaxWidth()
                         .height(48.dp)
                         .clickable {
-                            Apps.openShortcut(context, shortcut)
+                            Apps.openShortcut(context, shortcut, codeGiven)
                             onClose()
                         }
                         .padding(horizontal = 16.dp),

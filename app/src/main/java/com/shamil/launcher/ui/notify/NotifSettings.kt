@@ -118,12 +118,14 @@ private fun AppSwitches(prefs: NotifPrefs) {
         installed = withContext(Dispatchers.IO) { AppCache(context.applicationContext).readIndex() }
     }
 
-    val rows = remember(installed, favourites.packages, now.keys, seen) {
+    // Apps hidden in the vault never show up here (25 Oct, audit S5): their names would give them away.
+    val vault = remember { com.shamil.launcher.apps.VaultStore.get(context) }
+    val rows = remember(installed, favourites.packages, now.keys, seen, vault.apps) {
         val byPackage = installed.groupBy { it.component.packageName }.mapValues { it.value.first() }
         // Newest notifications first, then favourites in his order, then the rest that had any.
         val order = (now.entries.sortedByDescending { it.value.firstOrNull()?.postTime ?: 0L }.map { it.key } +
             favourites.packages + seen.sorted()).distinct()
-        order.mapNotNull { byPackage[it] }
+        order.filter { it !in vault }.mapNotNull { byPackage[it] }
     }
 
     if (installed.isEmpty()) {

@@ -158,11 +158,14 @@ internal fun MiniHome(onPick: (Node) -> Unit) {
     }
     // His favourites with the names and icons the home shows (the saved app list, read once, never written).
     val favourites = rememberFavourites()
-    val apps by produceState(emptyList<AppEntry>(), favourites.packages) {
+    // Vault apps stay out of the little phone, like on the real home (25 Oct, audit S5).
+    val vault = remember { com.shamil.launcher.apps.VaultStore.get(context) }
+    val vaultApps = vault.apps
+    val apps by produceState(emptyList<AppEntry>(), favourites.packages, vaultApps) {
         value = withContext(Dispatchers.IO) {
             val saved = runCatching { AppCache(context.applicationContext).readIndex() }.getOrDefault(emptyList())
             val byKey = saved.associateBy { it.favouriteKey }
-            favourites.packages.mapNotNull { byKey[it] }.take(8)
+            favourites.packages.mapNotNull { byKey[it] }.filter { it.component.packageName !in vaultApps }.take(8)
         }
     }
     // One slow clock for every hotspot's pulse, each a little later than the one before.

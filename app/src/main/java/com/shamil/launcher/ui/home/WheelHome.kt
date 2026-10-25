@@ -1155,9 +1155,8 @@ private fun DrawScope.drawWheelHome(st: WheelHomeState) {
     }
 }
 
-private fun wheelOpenSafely(context: Context, intent: Intent) {
-    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-}
+/** Through the lock like the Seelie home (25 Oct, audit S2): a locked clock or calendar app asks its code first. */
+private fun wheelOpenSafely(context: Context, intent: Intent) = com.shamil.launcher.ui.openSafely(context, intent)
 
 /**
  * The current time as state, nudged every minute by Android's time tick while home is on screen (the same as the

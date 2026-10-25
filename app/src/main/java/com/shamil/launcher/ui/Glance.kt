@@ -185,14 +185,17 @@ fun GlanceCard(state: GlanceState, modifier: Modifier = Modifier) {
 internal fun openWeatherApp(context: Context) {
     val pm = context.packageManager
     val launchable = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+    val vault = com.shamil.launcher.apps.VaultStore.get(context)
+    // An app hidden in the vault is skipped (its name must not pop up on a lock screen here).
     val app = launchable.firstOrNull { info ->
         val name = "${info.loadLabel(pm)} ${info.activityInfo.packageName}".lowercase()
-        "weather" in name || Regex("\\bweer\\b").containsMatchIn(name)
+        info.activityInfo.packageName !in vault && ("weather" in name || Regex("\\bweer\\b").containsMatchIn(name))
     } ?: return
     val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         .setClassName(app.activityInfo.packageName, app.activityInfo.name)
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    runCatching { context.startActivity(intent) }
+    // Through the lock (25 Oct, audit S2): a locked weather app asks for its code first.
+    vault.guard(app.activityInfo.packageName, app.loadLabel(pm).toString()) { runCatching { context.startActivity(intent) } }
 }
 
 @Composable

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherActivityInfo
 import android.content.pm.LauncherApps
+import android.content.pm.PackageManager
 import android.content.pm.ShortcutInfo
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
@@ -194,8 +195,35 @@ object Apps {
             }
     }
 
-    fun openShortcut(context: Context, shortcut: AppShortcut) =
-        VaultStore.get(context).guard(shortcut.info.`package`, shortcut.label) { openShortcutNow(context, shortcut) }
+    /**
+     * Opens one of an app's shortcuts through the lock. [codeGiven] = the swipe-right pop-up of a locked app, which only
+     * opens after its code (25 Oct, audit S6) and closes when Seelie stops: no second code then.
+     */
+    fun openShortcut(context: Context, shortcut: AppShortcut, codeGiven: Boolean = false) {
+        val vault = VaultStore.get(context)
+        if (codeGiven) {
+            vault.pass(shortcut.info.`package`)
+            openShortcutNow(context, shortcut)
+        } else vault.guard(shortcut.info.`package`, shortcut.label) { openShortcutNow(context, shortcut) }
+    }
+
+    /**
+     * Opens [intent] (the clock's alarms, the calendar, a browser...) through the lock (25 Oct, audit S2): first the app
+     * that will answer it is looked up, and a locked or vault app asks for its code. When Android would ask "Open with"
+     * (no default app picked) the app isn't known yet; the lock watcher catches that one once it's open.
+     * [start] does the actual start and says whether it worked; a waiting lock screen counts as "worked".
+     */
+    fun openIntent(context: Context, intent: Intent, start: () -> Boolean): Boolean {
+        val pm = context.packageManager
+        val target = runCatching {
+            pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+        }.getOrNull()
+        val vault = VaultStore.get(context)
+        if (target == null || !vault.guardsFromOutside(target)) return start()
+        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(target, 0)).toString() }.getOrNull() ?: target
+        vault.guard(target, label) { start() }
+        return true
+    }
 
     private fun openShortcutNow(context: Context, shortcut: AppShortcut) {
         try {
