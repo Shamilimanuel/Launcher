@@ -445,6 +445,9 @@ private fun GlanceShows() {
     Choice("Weather", ON_OFF, home.showWeather.onOff()) { home.useWeather(it == "on") }
     Choice("Battery percentage", ON_OFF, home.showBattery.onOff()) { home.useBattery(it == "on") }
     Choice("Next event", ON_OFF, home.showEvent.onOff()) { home.useEvent(it == "on") }
+    // 25 Oct (audit S20): anyone who sees the home can read the event's title; this keeps only its time.
+    Choice("Hide event titles", ON_OFF, home.hideEventTitles.onOff(), enabled = home.showEvent) { home.useHideEventTitles(it == "on") }
+    Hint("On: the event line and the agenda say \"Event at 18:00\" instead of what the event is.")
     GroupCard(R.drawable.ic_location_on, Geo, "Weather city", "Comes from your rough location for now", soon = true)
 }
 

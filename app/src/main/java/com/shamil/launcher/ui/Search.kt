@@ -50,7 +50,15 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.InterceptPlatformTextInput
+import androidx.compose.ui.platform.PlatformTextInputInterceptor
+import androidx.compose.ui.platform.PlatformTextInputMethodRequest
+import androidx.compose.ui.platform.PlatformTextInputSession
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shamil.launcher.apps.AppEntry
@@ -291,6 +299,7 @@ fun SearchPanel(
         }
         Spacer(Modifier.height(8.dp))
         val commandMode = command != null
+        NoKeyboardLearning {
         BasicTextField(
             value = field,
             onValueChange = {
@@ -306,7 +315,12 @@ fun SearchPanel(
             ),
             cursorBrush = SolidColor(look.accent),
             // No autocorrect: it would "fix" > commands and sums. The Search key opens the best match.
-            keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Search),
+            // 25 Oct (audit S22): no capitals either, and NoKeyboardLearning around it asks the keyboard not to learn.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+                imeAction = ImeAction.Search,
+            ),
             keyboardActions = KeyboardActions(onSearch = { openBest() }),
             modifier = Modifier
                 .padding(start = 38.dp)
@@ -335,7 +349,36 @@ fun SearchPanel(
                 }
             },
         )
+        }
     }
+}
+
+/**
+ * Asks the keyboard not to learn from the text box inside (25 Oct, audit S22): Android's
+ * IME_FLAG_NO_PERSONALIZED_LEARNING, the "incognito" flag. KeyboardOptions has no field for it, so this catches the
+ * moment the text box starts the keyboard and adds the flag. Most keyboards (Gboard, Samsung) respect it; it's a
+ * request, not a lock.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun NoKeyboardLearning(content: @Composable () -> Unit) {
+    InterceptPlatformTextInput(
+        interceptor = object : PlatformTextInputInterceptor {
+            override suspend fun interceptStartInputMethod(
+                request: PlatformTextInputMethodRequest,
+                nextHandler: PlatformTextInputSession,
+            ): Nothing {
+                val noLearning = object : PlatformTextInputMethodRequest {
+                    override fun createInputConnection(outAttributes: EditorInfo): InputConnection =
+                        request.createInputConnection(outAttributes).also {
+                            outAttributes.imeOptions = outAttributes.imeOptions or EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                        }
+                }
+                nextHandler.startInputMethod(noLearning)
+            }
+        },
+        content = content,
+    )
 }
 
 /** Command mode: the card for a complete command, or the commands that match what's typed so far. */

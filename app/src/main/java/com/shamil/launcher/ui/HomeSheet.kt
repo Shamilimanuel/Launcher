@@ -65,15 +65,20 @@ class HomePrefs private constructor(context: Context) {
     /** The event line (next event today) under the glance line. */
     var showEvent by mutableStateOf(prefs.getBoolean(KEY_EVENT, true))
         private set
+    /** "Hide event titles" (25 Oct, audit S20): the event line and agenda say "Event at 18:00", not what it is. */
+    var hideEventTitles by mutableStateOf(prefs.getBoolean(KEY_HIDE_TITLES, false))
+        private set
 
     fun useWeather(on: Boolean) { showWeather = on; prefs.edit { putBoolean(KEY_WEATHER, on) } }
     fun useBattery(on: Boolean) { showBattery = on; prefs.edit { putBoolean(KEY_BATTERY, on) } }
     fun useEvent(on: Boolean) { showEvent = on; prefs.edit { putBoolean(KEY_EVENT, on) } }
+    fun useHideEventTitles(on: Boolean) { hideEventTitles = on; prefs.edit { putBoolean(KEY_HIDE_TITLES, on) } }
 
     companion object {
         private const val KEY_WEATHER = "show_weather"
         private const val KEY_BATTERY = "show_battery"
         private const val KEY_EVENT = "show_event"
+        private const val KEY_HIDE_TITLES = "hide_event_titles"
         @Volatile private var instance: HomePrefs? = null
 
         fun get(context: Context): HomePrefs =

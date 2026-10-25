@@ -58,6 +58,7 @@ internal val SETTINGS_INDEX = listOf(
     hit("Line under the date: style, size, colour", Node.Clock, "Glance line", "glance line regel plain pill glow size grootte colour kleur inline one line", R.drawable.ic_sunny),
     hit("Glance line on / off + position", Node.Clock, "Glance line", "glance line regel hide verbergen position positie align uitlijnen", R.drawable.ic_sunny),
     hit("What the line shows: weather, battery %, next event", Node.Clock, "Glance line", "weather weer battery batterij percentage event afspraak agenda calendar kalender", R.drawable.ic_sunny),
+    hit("Hide event titles", Node.Clock, "Glance line", "hide verbergen event afspraak title titel name naam private privé privacy agenda calendar kalender", R.drawable.ic_calendar_month),
     hit("Spacing: clock, date, line, widget, left edge", Node.Clock, "Spacing", "spacing ruimte afstand gap tussenruimte edge rand margin marge"),
     hit("Seelie spirit: breathing colon + sparkle", Node.Clock, "Spacing", "spirit geest colon dubbelepunt breathing ademen touch"),
     hit("Sparkles by the clock", Node.Clock, "Spacing", "sparkles sterretjes glitter twinkle fonkelen"),

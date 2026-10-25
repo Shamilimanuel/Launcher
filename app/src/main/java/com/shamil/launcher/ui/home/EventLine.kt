@@ -120,12 +120,24 @@ fun EventLine(modifier: Modifier = Modifier) {
     ) {
         Box(Modifier.size(8.dp).background(Color(next.colour), CircleShape))
         Spacer(Modifier.width(8.dp))
-        Text(next.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false), style = text)
-        Spacer(Modifier.width(8.dp))
-        Text(whenText(next), maxLines = 1, style = text.copy(fontWeight = gl.weight, color = gl.color.copy(alpha = gl.color.alpha * 0.85f)))
+        if (home.hideEventTitles) {
+            // Titles hidden (25 Oct, audit S20): just "Event at 18:00", so anyone glancing at the home learns nothing.
+            Text(hiddenText(next), maxLines = 1, style = text)
+        } else {
+            Text(next.title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false), style = text)
+            Spacer(Modifier.width(8.dp))
+            Text(whenText(next), maxLines = 1, style = text.copy(fontWeight = gl.weight, color = gl.color.copy(alpha = gl.color.alpha * 0.85f)))
+        }
         Text("  ›", style = text)
     }
-    if (agendaOpen) AgendaSheet(events) { agendaOpen = false }
+    if (agendaOpen) AgendaSheet(events, home.hideEventTitles) { agendaOpen = false }
+}
+
+/** With "Hide event titles" on: "Event at 18:00", "Event now · until 20:45" or "All-day event". */
+private fun hiddenText(e: CalEvent, now: Long = System.currentTimeMillis()): String = when {
+    e.allDay -> "All-day event"
+    e.begin <= now -> "Event now · until ${time(e.end)}"
+    else -> "Event at ${time(e.begin)}"
 }
 
 private val HM = DateTimeFormatter.ofPattern("HH:mm")
@@ -149,7 +161,7 @@ private fun relative(e: CalEvent, now: Long = System.currentTimeMillis()): Strin
 /** The agenda pop-up: today and tomorrow as rounded cards, like Niagara's but in Seelie's look. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AgendaSheet(events: List<CalEvent>, onDismiss: () -> Unit) {
+private fun AgendaSheet(events: List<CalEvent>, hideTitles: Boolean, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val look = LocalLauncherLook.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -181,8 +193,8 @@ private fun AgendaSheet(events: List<CalEvent>, onDismiss: () -> Unit) {
             Spacer(Modifier.height(16.dp))
             Text("Your agenda", modifier = Modifier.padding(start = 6.dp),
                 style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, color = look.accent, fontSize = 26.sp, letterSpacing = 1.sp))
-            AgendaDay("Today", todays) { e -> closeThen { openSafely(context, AgendaSource.openIntent(e)) } }
-            AgendaDay("Tomorrow", tomorrows) { e -> closeThen { openSafely(context, AgendaSource.openIntent(e)) } }
+            AgendaDay("Today", todays, hideTitles) { e -> closeThen { openSafely(context, AgendaSource.openIntent(e)) } }
+            AgendaDay("Tomorrow", tomorrows, hideTitles) { e -> closeThen { openSafely(context, AgendaSource.openIntent(e)) } }
             Spacer(Modifier.height(14.dp))
             // Open the calendar app on today.
             val press = remember { MutableInteractionSource() }
@@ -207,9 +219,12 @@ private fun AgendaSheet(events: List<CalEvent>, onDismiss: () -> Unit) {
     }
 }
 
-/** One day: a small accent label, then its events in one rounded card (or "Nothing planned"). */
+/**
+ * One day: a small accent label, then its events in one rounded card (or "Nothing planned"). [hideTitles]: each row
+ * says only "Event" and its time, no title or place (tap still opens it in the calendar).
+ */
 @Composable
-private fun AgendaDay(label: String, events: List<CalEvent>, onOpen: (CalEvent) -> Unit) {
+private fun AgendaDay(label: String, events: List<CalEvent>, hideTitles: Boolean, onOpen: (CalEvent) -> Unit) {
     val look = LocalLauncherLook.current
     Text(label.uppercase(), modifier = Modifier.padding(start = 6.dp, top = 18.dp, bottom = 8.dp),
         style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.Bold, color = look.accent, fontSize = 11.sp, letterSpacing = 2.4.sp))
@@ -228,10 +243,10 @@ private fun AgendaDay(label: String, events: List<CalEvent>, onOpen: (CalEvent) 
                 Box(Modifier.width(4.dp).height(36.dp).background(Color(e.colour), RoundedCornerShape(2.dp)))
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(e.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    Text(if (hideTitles) (if (e.allDay) "All-day event" else "Event") else e.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, color = look.text, fontSize = 16.sp))
                     val rel = relative(e)
-                    Text(whenText(e) + (if (rel.isNotEmpty() && rel != "now") " · $rel" else "") + (e.location?.let { " · $it" } ?: ""),
+                    Text(whenText(e) + (if (rel.isNotEmpty() && rel != "now") " · $rel" else "") + (e.location?.takeIf { !hideTitles }?.let { " · $it" } ?: ""),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 13.sp))
                 }
