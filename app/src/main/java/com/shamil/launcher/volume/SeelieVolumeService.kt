@@ -76,6 +76,7 @@ class SeelieVolumeService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         owner.start()
+        runCatching { getSystemService(android.hardware.camera2.CameraManager::class.java)?.registerAvailabilityCallback(cameraWatch, main) }
         max = runCatching { audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }.getOrNull() ?: 15
         instance = this
         running = true
@@ -88,25 +89,62 @@ class SeelieVolumeService : AccessibilityService() {
         instance = null
         running = false
         main.removeCallbacksAndMessages(null)
+        runCatching { getSystemService(android.hardware.camera2.CameraManager::class.java)?.unregisterAvailabilityCallback(cameraWatch) }
         removeView()
         owner.stop()
         super.onDestroy()
     }
 
-    override fun onKeyEvent(event: KeyEvent): Boolean {
+    override fun onKeyEvent(event: KeyEvent): Boolean = try {
+        handleKey(event)
+    } catch (_: Throwable) {
+        // Anything going wrong here would take the home down with it (same process): hand the key to the phone instead.
+        stopRepeat()
+        false
+    }
+
+    private fun handleKey(event: KeyEvent): Boolean {
         val code = event.keyCode
         if (code != KeyEvent.KEYCODE_VOLUME_UP && code != KeyEvent.KEYCODE_VOLUME_DOWN) return false
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) taking[code] = takesKeys()
         val ours = taking[code] ?: false
         if (event.action == KeyEvent.ACTION_UP) taking.remove(code)
         if (!ours) return false
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            val dir = if (code == KeyEvent.KEYCODE_VOLUME_UP) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
-            runCatching { audio?.adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, 0) }
-            if (TogglePrefs.get(this).setup.volumeClick) runCatching { audio?.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.4f) }
-            show()
+        when {
+            // One step now, then our own repeat while held: a key we take never reaches Android's own repeat.
+            event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 -> {
+                stepKey(code)
+                stopRepeat()
+                repeatKey = code
+                repeatUntil = android.os.SystemClock.uptimeMillis() + REPEAT_CAP_MS
+                main.postDelayed(repeat, REPEAT_START_MS)
+            }
+            event.action == KeyEvent.ACTION_UP -> if (repeatKey == code) stopRepeat()
         }
         return true
+    }
+
+    private fun stepKey(code: Int) {
+        val dir = if (code == KeyEvent.KEYCODE_VOLUME_UP) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+        runCatching { audio?.adjustStreamVolume(AudioManager.STREAM_MUSIC, dir, 0) }
+        if (TogglePrefs.get(this).setup.volumeClick) runCatching { audio?.playSoundEffect(AudioManager.FX_KEY_CLICK, 0.4f) }
+        show()
+    }
+
+    // Holding a button: a step every 100 ms after 0.4 s, until it comes up, the screen goes off, or 4 s pass.
+    private var repeatKey = 0
+    private var repeatUntil = 0L
+    private val repeat = object : Runnable {
+        override fun run() {
+            if (repeatKey == 0 || power?.isInteractive != true || android.os.SystemClock.uptimeMillis() > repeatUntil) { stopRepeat(); return }
+            runCatching { stepKey(repeatKey) }
+            main.postDelayed(this, REPEAT_EVERY_MS)
+        }
+    }
+
+    private fun stopRepeat() {
+        repeatKey = 0
+        main.removeCallbacks(repeat)
     }
 
     /** Ours only with the screen on, nothing ringing or calling, and "Seelie's bar" chosen in settings. */
@@ -114,7 +152,19 @@ class SeelieVolumeService : AccessibilityService() {
         val setup = TogglePrefs.get(this).setup
         if (!setup.volumeKeys || setup.volumeLook == VolumeLook.SYSTEM.id) return false
         if (power?.isInteractive != true) return false
-        return (audio?.mode ?: AudioManager.MODE_NORMAL) == AudioManager.MODE_NORMAL
+        if ((audio?.mode ?: AudioManager.MODE_NORMAL) != AudioManager.MODE_NORMAL) return false
+        if (camerasInUse.isNotEmpty()) return false
+        val alarm = runCatching {
+            audio?.activePlaybackConfigurations?.any { it.audioAttributes.usage == android.media.AudioAttributes.USAGE_ALARM }
+        }.getOrNull() ?: false
+        return !alarm
+    }
+
+    // Which cameras an app has open right now (Android tells anyone, no permission): their volume keys are theirs.
+    private val camerasInUse = HashSet<String>()
+    private val cameraWatch = object : android.hardware.camera2.CameraManager.AvailabilityCallback() {
+        override fun onCameraUnavailable(cameraId: String) { camerasInUse += cameraId }
+        override fun onCameraAvailable(cameraId: String) { camerasInUse -= cameraId }
     }
 
     /** Slides the bar in (or keeps it up) and starts the quiet-seconds countdown again. Also used by the Volume toggle. */
@@ -157,7 +207,9 @@ class SeelieVolumeService : AccessibilityService() {
         ).apply {
             gravity = (if (left) Gravity.START else Gravity.END) or Gravity.TOP
             // Next to where a Galaxy's real volume buttons sit.
-            y = (resources.displayMetrics.heightPixels * 0.2f).toInt()
+            val screen = resources.displayMetrics.heightPixels
+            val bar = (380 * resources.displayMetrics.density).toInt()
+            y = minOf((screen * 0.2f).toInt(), screen - bar).coerceAtLeast(0)
         }
         if (runCatching { wm.addView(v, params) }.isSuccess) view = v
     }
@@ -197,6 +249,9 @@ class SeelieVolumeService : AccessibilityService() {
 
     companion object {
         private const val HIDE_MS = 3000L
+        private const val REPEAT_START_MS = 400L
+        private const val REPEAT_EVERY_MS = 100L
+        private const val REPEAT_CAP_MS = 4000L
         /** The running service, or null when it's switched off in Android's Accessibility settings. */
         var instance: SeelieVolumeService? = null
             private set
@@ -213,6 +268,7 @@ private class OverlayOwner : LifecycleOwner, SavedStateRegistryOwner {
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = saved.savedStateRegistry
     fun start() {
+        if (registry.currentState != Lifecycle.State.INITIALIZED) return
         saved.performRestore(null)
         registry.currentState = Lifecycle.State.RESUMED
     }

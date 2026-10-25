@@ -155,8 +155,11 @@ fun ColumnScope.TogglesSettingsContent() {
             "Seelie only listens to the two volume buttons there, nothing else. With the screen off, during calls and while " +
             "the phone rings, the phone's own volume stays.")
         LinkChip("Turn on in Android settings") { ToggleActions.open(context, android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+    } else if (s.volumeLook == VolumeLook.SYSTEM.id) {
+        Hint("Look is \"Phone's own\", so the volume buttons show the phone's own bar. Pick another look to use Seelie's.")
     } else {
         Choice("Volume buttons", listOf("seelie" to "Seelie's bar", "phone" to "Phone's own"), if (s.volumeKeys) "seelie" else "phone") { v -> prefs.change { it.copy(volumeKeys = v == "seelie") } }
+        Hint("The camera and a ringing alarm keep the buttons for themselves (shutter, snooze).")
     }
     Choice("Look", listOf(VolumeLook.GOLD, VolumeLook.STARS, VolumeLook.THREAD).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
     Choice("", listOf(VolumeLook.PETALS, VolumeLook.TRAIL, VolumeLook.LANTERN).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }

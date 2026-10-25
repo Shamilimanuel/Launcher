@@ -122,7 +122,9 @@ fun VolumeBar(level: Int, max: Int, look: VolumeLook, modifier: Modifier = Modif
     val wallpaper = LookStore.get(context).wallpaperLook
     val fraction by animateFloatAsState(level.toFloat() / max.coerceAtLeast(1), spring(stiffness = 700f), label = "volume")
     // Holding the bar: the handle sinks and glows (his press feel).
-    var pressed by remember { mutableStateOf(false) }
+    var tapping by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    val pressed = tapping || dragging
     val press by animateFloatAsState(if (pressed) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = 600f), label = "press")
     // His new picks take the wallpaper's colour when Seelie follows the wallpaper, gold (petals: pink) otherwise.
     val accent = wallpaper?.accent ?: BarGold
@@ -131,22 +133,25 @@ fun VolumeBar(level: Int, max: Int, look: VolumeLook, modifier: Modifier = Modif
     // the bar is on screen: it's only composed for those few seconds.
     val living = look == VolumeLook.STARS || look == VolumeLook.PETALS || look == VolumeLook.TRAIL
     var now by remember { mutableLongStateOf(0L) }
-    if (living) LaunchedEffect(Unit) { while (true) withFrameMillis { now = it } }
+    if (living) LaunchedEffect(Unit) {
+        val start = withFrameMillis { it }
+        while (true) withFrameMillis { now = it - start }
+    }
     val rain = remember { PetalRain() }
     fun step(y: Float, height: Float) = kotlin.math.round((1f - y / height).coerceIn(0f, 1f) * max).toInt()
     Canvas(
         modifier
             .pointerInput(max) {
                 detectTapGestures(
-                    onPress = { pressed = true; tryAwaitRelease(); pressed = false },
+                    onPress = { tapping = true; tryAwaitRelease(); tapping = false },
                     onTap = { onChange(step(it.y, size.height.toFloat())) },
                 )
             }
             .pointerInput(max) {
                 detectVerticalDragGestures(
-                    onDragStart = { pressed = true },
-                    onDragEnd = { pressed = false },
-                    onDragCancel = { pressed = false },
+                    onDragStart = { dragging = true },
+                    onDragEnd = { dragging = false },
+                    onDragCancel = { dragging = false },
                 ) { change, _ -> change.consume(); onChange(step(change.position.y, size.height.toFloat())) }
             }
     ) {
