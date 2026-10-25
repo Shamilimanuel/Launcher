@@ -482,7 +482,7 @@ internal fun rememberFavouriteApps(): List<AppEntry> {
  * something in settings and the little phone follows at once.
  */
 @Composable
-private fun rememberCurrentParts(): SaveParts {
+internal fun rememberCurrentParts(): SaveParts {
     val context = LocalContext.current
     val keys = listOf<Any?>(
         LookStore.get(context).look, LookStore.get(context).iconPack, HomeStyleStore.get(context).style,

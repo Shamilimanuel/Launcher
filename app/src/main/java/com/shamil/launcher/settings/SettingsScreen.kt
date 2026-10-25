@@ -207,6 +207,8 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
     fun spots(list: List<Spot>): List<Spot> = list.map { s -> s.node?.let { tabs[it] = s.tab }; s.copy(tab = 0) }
     var stack by remember { mutableStateOf(spots(listOf(Spot()) + (START_PAGES[startAt] ?: emptyList()))) }
     fun open(node: Node, tab: Int = 0) { stack = stack + spots(listOf(Spot(node, tab))) }
+    // A Seelie wallpaper page (a folder, a preview, the credits) goes on top of wherever he is (25 Oct).
+    fun openWall(page: String) { stack = stack + Spot(wall = page) }
     // Search on the top page: type a word, tap a result to jump straight to its page and tab.
     var query by remember { mutableStateOf("") }
     fun pop() { if (stack.size > 1) stack = stack.dropLast(1) else onClose() }
@@ -235,6 +237,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                     // After adding, back to the stack tab, where the new widget sits at the end.
                     AppWidgetPickerContent(onAdded = ::pop)
                 }
+                spot.wall != null -> SeelieWallpaperPage(spot.wall, onBack = ::pop, onOpen = ::openWall)
                 node == null -> PageFrame("Serenitea", "Seelie settings", onBack = ::pop) {
                     SettingsSearch(query) { query = it }
                     if (query.isNotBlank()) {
@@ -244,7 +247,8 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                         hits.forEach { hit ->
                             GroupCard(hit.icon, hit.tint, hit.title, hit.where) {
                                 query = ""
-                                stack = spots(listOf(Spot(), Spot(hit.node, hit.node.tabOf(hit.tab))))
+                                // A wallpaper hit (a folder, the credits) opens that page on top of its tab.
+                                stack = spots(listOf(Spot(), Spot(hit.node, hit.node.tabOf(hit.tab)))) + listOfNotNull(hit.wall?.let { Spot(wall = it) })
                             }
                         }
                         return@PageFrame
@@ -268,7 +272,7 @@ fun SettingsApp(looks: LookStore, startAt: String? = null, onClose: () -> Unit) 
                         pinned = pinnedPreview(node),
                         tabs = node.tabs, tab = tab, onTab = { tabs[node] = it },
                     ) {
-                        NodeContent(node, node.tabs.getOrNull(tab), looks, onOpen = ::open, onPicker = { stack = stack + Spot(picker = true) })
+                        NodeContent(node, node.tabs.getOrNull(tab), looks, onOpen = ::open, onPicker = { stack = stack + Spot(picker = true) }, onWall = ::openWall)
                     }
                 }
             }
@@ -291,12 +295,14 @@ private fun pinnedPreview(node: Node): (@Composable () -> Unit)? = when (node) {
 
 /** What each page shows on each tab. Where two old pages both set a part (Layout and Home style), its tab shows both slices. */
 @Composable
-private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, onOpen: (Node, Int) -> Unit, onPicker: () -> Unit) {
+private fun ColumnScope.NodeContent(
+    node: Node, tab: String?, looks: LookStore, onOpen: (Node, Int) -> Unit, onPicker: () -> Unit, onWall: (String) -> Unit,
+) {
     val look = LocalLauncherLook.current
     val context = LocalContext.current
     when (node) {
         Node.Background -> when (tab) {
-            "Wallpaper" -> WallpaperSettingsContent()
+            "Wallpaper" -> WallpaperSettingsContent(onWall)
             "Living" -> LiveBgSettingsContent(showPreview = false, part = "living")
             "Scene" -> LiveBgSettingsContent(showPreview = false, part = "scene")
             "Fade" -> LayoutSettingsContent(part = "fade")
@@ -423,6 +429,8 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
             GroupCard(R.drawable.ic_settings, Geo, "Rescue screen", "What opens if Seelie keeps crashing: reset the look, switch home app") {
                 com.shamil.launcher.SafeMode.open(context)
             }
+            // Where Seelie's own wallpapers come from (25 Oct; also under Background → Wallpaper).
+            CreditsCard(onWall)
             val version = remember {
                 @Suppress("DEPRECATION")   // the newer form needs Android 13; this one works everywhere
                 runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "?"

@@ -121,14 +121,17 @@ internal enum class Node(val title: String, val sub: String, @DrawableRes val ic
     Style("Theme & style", "Theme, colours, fonts, icons, bundles", R.drawable.ic_palette, Pyro, listOf("Theme", "Colours", "Fonts", "Icons", "Bundles & layouts")),
     Privacy("Privacy & vault", "PIN look, what lives in the vault", R.drawable.ic_lock, Electro, emptyList()),
     Saves("Saves & backup", "Your saved looks, backup, share", R.drawable.ic_history, Dendro, listOf("Saves", "Backup & share")),
-    About("About", "Default home app, rescue screen, version", R.drawable.ic_info, Geo, emptyList());
+    About("About", "Default home app, rescue screen, credits, version",R.drawable.ic_info, Geo, emptyList());
 
     /** The tab's number from its name (0 when the name isn't one of this page's tabs). */
     fun tabOf(name: String?): Int = tabs.indexOf(name).coerceAtLeast(0)
 }
 
-/** A place in settings: the top page (no node), a node (opened on [tab]), or the widget picker. */
-internal data class Spot(val node: Node? = null, val tab: Int = 0, val picker: Boolean = false)
+/**
+ * A place in settings: the top page (no node), a node (opened on [tab]), the widget picker, or one of the Seelie
+ * wallpaper pages ([wall], a [WallPages] name: a folder, a preview or the credits; 25 Oct).
+ */
+internal data class Spot(val node: Node? = null, val tab: Int = 0, val picker: Boolean = false, val wall: String? = null)
 
 /** The mini home is laid out at his phone's real width (384dp), then shrunk, so it shows the real clock, cards and list. */
 private val MINI_W = 384.dp

@@ -3,6 +3,7 @@ package com.shamil.launcher.settings
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.graphics.Color
 import com.shamil.launcher.R
+import com.shamil.launcher.ui.theme.SeelieWallpapers
 
 /*
  * Everything the settings search can find (24 Oct: one entry per row of the settings mockup's inventory, so every
@@ -10,10 +11,13 @@ import com.shamil.launcher.R
  * Words are English and Dutch, since his phone is Dutch.
  */
 
-/** One setting: its name, the page and tab it lives on, and extra words that should also find it. */
+/**
+ * One setting: its name, the page and tab it lives on, and extra words that should also find it.
+ * [wall]: a Seelie wallpaper page to open on top of that tab (a folder or the credits, [WallPages]; 25 Oct).
+ */
 internal class SettingHit(
     val title: String, val node: Node, val tab: String?, val words: String,
-    @DrawableRes val icon: Int = node.icon, val tint: Color = node.tint,
+    @DrawableRes val icon: Int = node.icon, val tint: Color = node.tint, val wall: String? = null,
 ) {
     /** "Clock & date · Date": where it lives, shown under the title. */
     val where: String = node.title + (tab?.let { " · $it" } ?: "")
@@ -24,15 +28,21 @@ internal class SettingHit(
     }
 }
 
-private fun hit(title: String, node: Node, tab: String?, words: String, @DrawableRes icon: Int = node.icon, tint: Color = node.tint) =
-    SettingHit(title, node, tab, words, icon, tint)
+private fun hit(title: String, node: Node, tab: String?, words: String, @DrawableRes icon: Int = node.icon, tint: Color = node.tint, wall: String? = null) =
+    SettingHit(title, node, tab, words, icon, tint, wall)
 
 internal val SETTINGS_INDEX = listOf(
     // ---- Background
     hit("Choose a wallpaper from your gallery", Node.Background, "Wallpaper", "wallpaper achtergrond background picture foto photo gallery galerij kies pick"),
     hit("Wallpaper on home, lock screen or both", Node.Background, "Wallpaper", "lock screen vergrendelscherm home both beide put"),
     hit("Colours follow your wallpaper", Node.Background, "Wallpaper", "material you dynamic kleuren colours colors follow volgen adapt swatches keep theme"),
-    hit("Seelie's own wallpapers", Node.Background, "Wallpaper", "collection collectie folders mappen achtergrond seelie own eigen", R.drawable.ic_star, Geo),
+    // 25 Oct: the "SOON" collection is real now: four folders of real art, each findable, plus their credits.
+    hit("Seelie wallpapers", Node.Background, "Wallpaper", "seelie own eigen wallpapers achtergronden collection collectie folders mappen art kunst paintings schilderijen prints space ruimte", R.drawable.ic_star, Geo),
+    hit("Night sky & space wallpapers", Node.Background, "Wallpaper", "night nacht sky lucht hemel space ruimte stars sterren milky way melkweg nebula nevel webb hubble eso nasa iss aurora noorderlicht", R.drawable.ic_clear_night, Geo, WallPages.folder(SeelieWallpapers.NIGHT_SKY)),
+    hit("Anime & fantasy wallpapers", Node.Background, "Wallpaper", "anime fantasy fantasie fairy tale sprookje illustration illustratie hiroshige dulac rackham foxes vossen moon maan", R.drawable.ic_star, Geo, WallPages.folder(SeelieWallpapers.FANTASY)),
+    hit("Nature, seasons & classic art wallpapers", Node.Background, "Wallpaper", "nature natuur seasons seizoenen classic klassiek art kunst painting schilderij landscape landschap moon maan snow sneeuw fuji mountains bergen", R.drawable.ic_partly_cloudy_night, Geo, WallPages.folder(SeelieWallpapers.NATURE)),
+    hit("Lo-fi & rain wallpapers", Node.Background, "Wallpaper", "lofi lo-fi rain regen rainy regenachtig umbrella paraplu cozy gezellig night nacht city stad cat kat", R.drawable.ic_rainy, Geo, WallPages.folder(SeelieWallpapers.LOFI_RAIN)),
+    hit("Wallpaper credits", Node.Background, "Wallpaper", "credits bronnen sources licence license licentie copyright artist kunstenaar museum attribution naamsvermelding cc by about over", R.drawable.ic_info, Geo, WallPages.CREDITS),
     hit("Living background on / off", Node.Background, "Living", "living background achtergrond live animated bewegend levend"),
     hit("Living background presets", Node.Background, "Living", "presets cozy gilded night sakura dusk thunder calm off start mix"),
     hit("Effects: petals, stars, rain, snow…", Node.Background, "Living", "effects effecten petals blossom sakura bloesem leaves bladeren butterflies vlinders dandelions paardenbloem lanterns lantaarns fireflies vuurvliegjes motes stars sterren aurora rain regen snow sneeuw storm onweer clouds wolken mist glints water tilt kantelen density amount hoeveelheid"),

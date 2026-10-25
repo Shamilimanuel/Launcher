@@ -42,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shamil.launcher.R
 import com.shamil.launcher.ui.theme.LocalLauncherLook
+import androidx.compose.ui.text.style.TextOverflow
 import com.shamil.launcher.ui.theme.LookStore
+import com.shamil.launcher.ui.theme.SeelieWallpapers
 import com.shamil.launcher.ui.theme.WallpaperStore
 import com.shamil.launcher.ui.theme.WallpaperTheme
 import kotlinx.coroutines.Dispatchers
@@ -52,9 +54,11 @@ import kotlinx.coroutines.withContext
 /**
  * Look → Wallpaper (24 Oct): pick his own picture (home, lock screen or both), and let Seelie's colours follow it.
  * Seelie keeps a copy, so the theme previews and new saves show the real wallpaper.
+ * 25 Oct: under the gallery button, Seelie's own wallpapers (four folders of real art, [SeelieWallpaperSection]);
+ * [onWall] opens their pages (a folder, a preview, the credits).
  */
 @Composable
-internal fun WallpaperSettingsContent() {
+internal fun WallpaperSettingsContent(onWall: (String) -> Unit) {
     val context = LocalContext.current
     val look = LocalLauncherLook.current
     val scope = rememberCoroutineScope()
@@ -95,9 +99,11 @@ internal fun WallpaperSettingsContent() {
         }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text(if (picture != null) "Your wallpaper" else "Not picked in Seelie yet",
+            // One of Seelie's own: its name (25 Oct).
+            val seelie = remember(store.seelieId) { SeelieWallpapers.find(context, store.seelieId) }
+            Text(if (picture != null) seelie?.title ?: "Your wallpaper" else "Not picked in Seelie yet", maxLines = 2, overflow = TextOverflow.Ellipsis,
                 style = TextStyle(fontFamily = look.font, color = look.text, fontSize = 16.sp))
-            Text(if (picture != null) "Shown in your previews and new saves"
+            Text(if (picture != null) (if (seelie != null) "A Seelie wallpaper · " else "") + "Shown in your previews and new saves"
                 else "Android doesn't let Seelie see a wallpaper set elsewhere. Pick it here once and it shows everywhere.",
                 style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.5.sp))
         }
@@ -107,6 +113,10 @@ internal fun WallpaperSettingsContent() {
     GroupCard(R.drawable.ic_wallpaper, Anemo, if (busy) "Setting it…" else "Choose from gallery", "Photos, screenshots, anything you saved") {
         if (!busy) pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
     }
+
+    // Seelie's own wallpapers sit right under the gallery: the other place a picture can come from (25 Oct).
+    SectionLabel("Seelie wallpapers")
+    SeelieWallpaperSection(onWall)
 
     SectionLabel("Colours")
     Choice("Seelie's colours", listOf("follow" to "Follow wallpaper", "theme" to "Keep my theme"), if (following) "follow" else "theme") {
@@ -124,8 +134,5 @@ internal fun WallpaperSettingsContent() {
             Text("from your wallpaper", style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.5.sp))
         }
     } ?: Hint("Your phone doesn't share the wallpaper's colours, so \"Follow wallpaper\" uses the Fuji colours.")
-
-    SectionLabel("Seelie wallpapers")
-    GroupCard(R.drawable.ic_star, Geo, "Seelie's own collection", "Folders of night-and-gold wallpapers, some of them alive", soon = true)
     Spacer(Modifier.height(8.dp))
 }

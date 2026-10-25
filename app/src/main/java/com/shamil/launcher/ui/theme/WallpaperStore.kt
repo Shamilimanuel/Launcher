@@ -47,29 +47,57 @@ class WallpaperStore private constructor(private val context: Context) {
     /** Seelie's copy of the lock screen picture (when he picked one through Seelie). */
     fun lockCopyFile(): File? = lockFile.takeIf { version > 0 && it.exists() }
 
+    /** Which of Seelie's own wallpapers is on the home screen now (its id), or null for his own picture (25 Oct). */
+    var seelieId by androidx.compose.runtime.mutableStateOf(prefs.getString(KEY_SEELIE_ID, null))
+        private set
+
     /** Sets the picked picture as his wallpaper (on [target]) and keeps a copy. Slow: off the main thread. */
     fun setFromUri(uri: Uri): Boolean = runCatching {
         val bitmap = decodeForScreen(context, uri) ?: return@runCatching false
         val picked = File(file.parentFile, "picked.jpg")
         picked.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 92, it) }
-        val flags = when (target) {
+        putOn(picked, target, seelie = null)
+    }.getOrDefault(false)
+
+    /**
+     * Sets one of Seelie's own wallpapers ([SeelieWallpapers], bundled with the app) on [where]: "home", "lock" or "both".
+     * The same path as a gallery pick (25 Oct): Seelie keeps its copy, the colours follow, new saves pick it up.
+     * The file is already phone-shaped, so it goes on as it is. Slow: off the main thread.
+     */
+    fun setFromAsset(wallpaper: SeelieWallpaper, where: String = target): Boolean = runCatching {
+        val picked = File(file.parentFile, "picked.jpg")
+        context.assets.open(wallpaper.asset).use { input -> picked.outputStream().use { input.copyTo(it) } }
+        putOn(picked, where, seelie = wallpaper.id)
+    }.getOrDefault(false)
+
+    /** Puts [picked] on [where] through Android, keeps a copy of each screen it went on, then deletes [picked]. */
+    private fun putOn(picked: File, where: String, seelie: String?): Boolean {
+        val flags = when (where) {
             "home" -> WallpaperManager.FLAG_SYSTEM
             "lock" -> WallpaperManager.FLAG_LOCK
             else -> WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK
         }
         picked.inputStream().use { WallpaperManager.getInstance(context).setStream(it, null, true, flags) }
         // Keep a copy of each screen it went on (the previews show the home one; a save swaps both).
-        if (target != "home") picked.copyTo(lockFile, overwrite = true)
-        if (target != "lock") picked.copyTo(file, overwrite = true)
+        if (where != "home") picked.copyTo(lockFile, overwrite = true)
+        if (where != "lock") {
+            picked.copyTo(file, overwrite = true)
+            noteSeelie(seelie)
+        }
         picked.delete()
         version++
-        true
-    }.getOrDefault(false)
+        return true
+    }
+
+    private fun noteSeelie(id: String?) {
+        seelieId = id
+        prefs.edit { putString(KEY_SEELIE_ID, id) }
+    }
 
     /** A save with its own pictures was applied: those are the wallpapers now, so they become the copies. */
     fun keep(home: File?, lock: File?) {
         runCatching {
-            home?.takeIf { it.exists() }?.copyTo(file, overwrite = true)
+            home?.takeIf { it.exists() }?.copyTo(file, overwrite = true)?.also { noteSeelie(null) }
             lock?.takeIf { it.exists() }?.copyTo(lockFile, overwrite = true)
             version++
         }
@@ -85,6 +113,7 @@ class WallpaperStore private constructor(private val context: Context) {
         const val PREFS = "wallpaper"
         private const val KEY_TARGET = "target"
         private const val KEY_THEME_BEFORE = "theme_before"
+        private const val KEY_SEELIE_ID = "seelie_id"
         @Volatile private var instance: WallpaperStore? = null
 
         fun get(context: Context): WallpaperStore =
