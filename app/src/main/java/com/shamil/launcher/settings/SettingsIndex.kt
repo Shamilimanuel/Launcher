@@ -122,6 +122,7 @@ internal val SETTINGS_INDEX = listOf(
     hit("Seelie icon styles (Themed, Glass)", Node.Style, "Icons", "icons iconen themed glass glas pictogram style stijl", R.drawable.ic_apps, Cryo),
     hit("Icon pack", Node.Style, "Icons", "icon pack darko pictogram original", R.drawable.ic_apps, Cryo),
     hit("Icon size", Node.Style, "Icons", "icon size grootte bigger groter smaller kleiner", R.drawable.ic_apps, Cryo),
+    hit("Home style: Seelie, Poster, Radial wheel", Node.Style, "Bundles & layouts", "home style startscherm stijl poster wheel wiel radial painting schilderij mode modus", R.drawable.ic_home_filled, Geo),
     hit("Home style bundle", Node.Style, "Bundles & layouts", "bundle bundel home style stijl glass floating gold minimal spirit reset", R.drawable.ic_home_filled, Electro),
     hit("Layouts (Seelie now, Big day…)", Node.Style, "Bundles & layouts", "layout layouts indeling preset seelie now spirit hour big day calm night smart launcher", R.drawable.ic_drag_indicator, Geo),
     hit("Block order", Node.Style, "Bundles & layouts", "order volgorde blocks blokken move verplaatsen up omhoog down omlaag", R.drawable.ic_drag_indicator, Geo),

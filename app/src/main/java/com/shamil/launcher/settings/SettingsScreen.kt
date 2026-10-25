@@ -384,6 +384,7 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
             }
             "Icons" -> IconsPage(looks)
             "Bundles & layouts" -> {
+                HomeModeChoice()
                 HomeStyleSettingsContent(part = "bundles")
                 LayoutSettingsContent(part = "layouts")
                 LayoutSettingsContent(part = "order")

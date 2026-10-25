@@ -99,7 +99,7 @@ object SafeMode {
      * Theme, font, icons, favourites, apps, vault and saves are kept, so a save can be applied again afterwards.
      */
     fun resetLook(context: Context) {
-        for (file in listOf(HomeLayoutStore.PREFS, RailStore.PREFS, LiveBgStore.PREFS, "clock", "home_style", PinLookStore.PREFS)) {
+        for (file in listOf(HomeLayoutStore.PREFS, RailStore.PREFS, LiveBgStore.PREFS, "clock", "home_style", PinLookStore.PREFS, com.shamil.launcher.ui.home.HomeModeStore.PREFS)) {
             context.getSharedPreferences(file, Context.MODE_PRIVATE).edit(commit = true) { clear() }
         }
         SavesStore.get(context).reloadStores()
@@ -145,7 +145,7 @@ fun SafeModeScreen(byHand: Boolean, onDone: () -> Unit) {
         )
         Spacer(Modifier.height(22.dp))
         RescueButton("Back to my home", "Try the normal home again") { SafeMode.clear(context); onDone() }
-        RescueButton("Reset the look", "Layout, A–Z rail, living background, clock and home style back to the defaults. Theme, apps and saves stay.") { confirmReset = true }
+        RescueButton("Reset the look", "Home style (back to Seelie), layout, A–Z rail, living background and clock back to the defaults. Theme, apps and saves stay.") { confirmReset = true }
         RescueButton("Seelie settings", "Change or switch off whatever broke") { SeelieSettings.open(context) }
         RescueButton("Switch home app", "Use another launcher for now") {
             runCatching { context.startActivity(DefaultHome.settingsIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }

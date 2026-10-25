@@ -148,8 +148,9 @@ object ToggleActions {
             QuickToggle.BLUETOOTH -> open(context, Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
             QuickToggle.DATA -> open(context, panel(Settings.Panel.ACTION_INTERNET_CONNECTIVITY), Intent(Settings.ACTION_WIRELESS_SETTINGS))
             QuickToggle.AIRPLANE -> open(context, Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS), Intent(Settings.ACTION_WIRELESS_SETTINGS))
-            // Volume: Android's own volume slider pops up, exactly like pressing a volume key. Panel as backup.
-            QuickToggle.VOLUME -> if (!showVolumeSlider(context)) {
+            // Volume: Seelie's own sheet in his chosen look (25 Oct); "Phone's own" = Android's slider, like a volume key.
+            QuickToggle.VOLUME -> if (TogglePrefs.get(context).setup.volumeLook != VolumeLook.SYSTEM.id && VolumeSheet.hosts > 0) VolumeSheet.open = true
+            else if (!showVolumeSlider(context)) {
                 open(context, panel(Settings.Panel.ACTION_VOLUME), Intent(Settings.ACTION_SOUND_SETTINGS))
             }
             QuickToggle.SAVER -> open(context, Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS), Intent(Intent.ACTION_POWER_USAGE_SUMMARY))

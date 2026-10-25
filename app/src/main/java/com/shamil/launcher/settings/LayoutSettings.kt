@@ -224,3 +224,15 @@ private fun ArrowButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
         Text(glyph, style = TextStyle(color = if (enabled) look.accent else look.textDim.copy(alpha = 0.3f), fontSize = 20.sp, fontWeight = FontWeight.Bold))
     }
 }
+
+/** Home style: today's tall page, Poster or the Radial wheel (his 25 Oct picks; more styles come later). */
+@Composable
+internal fun HomeModeChoice() {
+    val context = LocalContext.current
+    val modes = remember { com.shamil.launcher.ui.home.HomeModeStore.get(context) }
+    SectionLabel("Home style")
+    Hint("How your home works. Your saves remember it, so each save can have its own.")
+    com.shamil.launcher.ui.home.HomeMode.entries.forEach { m ->
+        PresetRow(m.title, m.about, selected = modes.mode == m) { modes.use(m) }
+    }
+}

@@ -40,6 +40,10 @@ data class ToggleSetup(
     val labels: Boolean = false,
     /** The small "On" / "Off" line (off by default, so the approved look stays: just the round icons). */
     val stateLine: Boolean = false,
+    /** The Volume button's look ([VolumeLook] id): Seelie's own sheet in a style, or "system" = the phone's pop-up. */
+    val volumeLook: String = "gold",
+    /** A soft click on each volume step (from the video he liked). */
+    val volumeClick: Boolean = false,
 )
 
 /** The saved quick-toggles setup (on the phone, Compose state, one shared store: like HomePrefs). */
@@ -63,6 +67,7 @@ class TogglePrefs private constructor(context: Context) {
                 put("onColour", s.onColour); put("glow", s.glow); put("offLook", s.offLook)
                 put("backing", s.backing); put("cardLabel", s.cardLabel)
                 put("align", s.align); put("labels", s.labels); put("stateLine", s.stateLine)
+                put("volumeLook", s.volumeLook); put("volumeClick", s.volumeClick)
             }.toString())
         }
     }
@@ -102,6 +107,8 @@ class TogglePrefs private constructor(context: Context) {
             align = pick("align", d.align, "start", "center", "spread"),
             labels = o.optBoolean("labels", d.labels),
             stateLine = o.optBoolean("stateLine", d.stateLine),
+            volumeLook = VolumeLook.byId(o.optString("volumeLook", d.volumeLook)).id,
+            volumeClick = o.optBoolean("volumeClick", d.volumeClick),
         )
     } catch (e: Exception) {
         ToggleSetup()

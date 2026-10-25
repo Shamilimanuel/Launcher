@@ -148,6 +148,15 @@ fun ColumnScope.TogglesSettingsContent() {
     }
     Hint("The card matches your widget card: its style, see-through level, corners and border all follow Widgets → Card.")
 
+    SectionLabel("Volume button")
+    Hint("Tapping Volume opens Seelie's own slider in this look. The phone's volume keys still show the phone's pop-up.")
+    Choice("Look", VolumeLook.entries.take(3).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
+    Choice("", VolumeLook.entries.drop(3).map { it.id to it.title }, s.volumeLook) { v -> prefs.change { it.copy(volumeLook = v) } }
+    if (s.volumeLook != VolumeLook.SYSTEM.id) {
+        VolumeSlider(9, 15, VolumeLook.byId(s.volumeLook), Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {}
+        Choice("Soft click on each step", ON_OFF, s.volumeClick.onOff()) { v -> prefs.change { it.copy(volumeClick = v == "on") } }
+    }
+
     SectionLabel("What each one really does")
     Hint(
         "Android only lets apps switch a few things themselves. Since Android 10 no app may flip Wi-Fi, Bluetooth, " +

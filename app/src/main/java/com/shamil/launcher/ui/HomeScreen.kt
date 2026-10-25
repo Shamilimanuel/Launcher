@@ -32,6 +32,13 @@ import com.shamil.launcher.ui.home.BLOCK_FAVS
 import com.shamil.launcher.ui.home.BLOCK_MUSIC
 import com.shamil.launcher.ui.home.BLOCK_WIDGETS
 import com.shamil.launcher.ui.home.BLOCK_TOP
+import com.shamil.launcher.ui.home.HomeMode
+import com.shamil.launcher.ui.toggles.VolumeSheetHost
+import com.shamil.launcher.ui.toggles.VolumeSheet
+import com.shamil.launcher.ui.home.HomeModeStore
+import com.shamil.launcher.ui.home.PosterHome
+import com.shamil.launcher.ui.home.WheelHome
+import com.shamil.launcher.ui.home.WheelHomeStatus
 import com.shamil.launcher.ui.livebg.rememberLiveBgController
 import com.shamil.launcher.ui.livebg.LivingBackground
 import android.content.BroadcastReceiver
@@ -258,7 +265,14 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
     var slideY by remember { mutableStateOf<Float?>(null) }
     var slideTarget by remember { mutableStateOf<AppEntry?>(null) }
     // The A–Z rail's style (Look → Layout → A–Z rail): Seelie's own "Guide on the arc", or the Niagara-style wave.
-    val railStyle = remember { RailStore.get(context) }.style
+    // His home style (Look → Theme & style → Bundles & layouts): today's tall page, Poster or the Radial wheel.
+    val homeMode = remember { HomeModeStore.get(context) }.mode
+    // Only the Seelie page shows the stats card: elsewhere a tap on the glance line mustn't leave an invisible one open.
+    LaunchedEffect(glance.open, homeMode) { if (homeMode != HomeMode.SEELIE && glance.open) glance.open = false }
+    // In the wheel home the bottom-right corner belongs to the wheel, so an arc rail steps aside for the edge guide.
+    val railStyle = remember { RailStore.get(context) }.style.let { s ->
+        if (homeMode == HomeMode.WHEEL && s.onArc) RailStyle.GUIDE else s
+    }
     val arcRail = rememberArcRailState()
     arcRail.callbacks = ArcCallbacks(
         onPick = { picked -> onListLetter(if (picked == STAR) null else picked) },
@@ -298,7 +312,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                 }
             }
             // Guide on the arc: drags along the curve at the bottom right (taps still reach what's under them).
-            .arcRailInput(arcRail, enabled = railStyle.onArc && !state.searching && !state.editingFavourites && !vaultOpen)
+            .arcRailInput(arcRail, enabled = railStyle.onArc && !state.searching && !state.editingFavourites && !vaultOpen && !VolumeSheet.open)
     ) {
         val screenH = maxHeight
 
@@ -314,6 +328,14 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         )
 
         KeepAliveFade(visible = listLetter == null && !state.searching && !state.editingFavourites) {
+          // The other home styles take this spot; everything around it (list, search, rail, vault) stays the same.
+          // Swipe up / "All apps" opens the A–Z list at the top.
+          val openApp = { app: AppEntry -> Apps.launch(context, app) }
+          val allApps = { onListLetter(lettersWithApps.minOrNull() ?: "A") }
+          when (homeMode) {
+            HomeMode.POSTER -> PosterHome(favouriteApps, glance, onOpenApp = openApp, onAppMenu = openMenu, onAllApps = allApps, modifier = Modifier.fillMaxSize())
+            HomeMode.WHEEL -> WheelHome(favouriteApps, listedApps, glance, onOpenApp = openApp, onAllApps = allApps, modifier = Modifier.fillMaxSize())
+            HomeMode.SEELIE ->
             Column(
                 Modifier
                     .fillMaxSize()
@@ -410,6 +432,7 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
                     }
                 }
             }
+          }
         }
 
         KeepAliveFade(visible = listLetter != null && !state.searching) {
@@ -472,6 +495,9 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             )
         }
 
+        // Seelie's own volume sheet (the Volume quick toggle opens it).
+        VolumeSheetHost()
+
         // The vault, over everything (hold • on the rail).
         AnimatedVisibility(visible = vaultOpen, enter = fadeIn(tween(220)), exit = fadeOut(tween(180))) {
             VaultScreen(allApps = apps, onClose = { vaultOpen = false })
@@ -485,7 +511,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
         }
 
         // The left thumb (RailRelay): only while a rail is on screen.
-        val railOn = !state.searching && !state.editingFavourites && !vaultOpen
+        // In the wheel home the rail steps out of the way while the wheel is open (its top shelf sits under it).
+        val railOn = !state.searching && !state.editingFavourites && !vaultOpen && !(homeMode == HomeMode.WHEEL && WheelHomeStatus.open) && !VolumeSheet.open
         SideEffect {
             RailRelay.enabled = railOn
             RailRelay.arc = if (railStyle.onArc) arcRail else null
@@ -501,7 +528,8 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
             val railBox = Modifier
                 .align(if (RailSide.left) Alignment.TopStart else Alignment.TopEnd)
                 .padding(top = screenH * 0.27f)
-                .height(screenH * 0.64f)
+                // In the wheel home it ends above the wheel's corner.
+                .height(screenH * (if (homeMode == HomeMode.WHEEL) 0.42f else 0.64f))
                 // The touch strip runs to the screen edge; letters sit 32dp in, like his Niagara.
                 .width(46.dp)
                 // Left-hand mode: the same rail, mirrored onto the left edge.
