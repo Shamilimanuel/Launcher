@@ -54,6 +54,8 @@ import com.shamil.launcher.ui.home.BundleDate
 import com.shamil.launcher.ui.home.DATE_LOOKS
 import com.shamil.launcher.ui.home.Gold
 import com.shamil.launcher.ui.home.HomeBundle
+import com.shamil.launcher.ui.home.HomeMode
+import com.shamil.launcher.ui.home.HomeModeStore
 import com.shamil.launcher.ui.home.HomeStyle
 import com.shamil.launcher.ui.home.HomeStyleStore
 import com.shamil.launcher.ui.home.HomeTop
@@ -213,6 +215,7 @@ internal fun HomePreview(scale: Float = 0.7f) {
     ) {
         val context = LocalContext.current
         val hs = HomeStyleStore.get(context).style
+        val mode = remember { HomeModeStore.get(context) }.mode
         // Laid out at full size, then shrunk: the layout itself takes only the smaller space.
         Column(Modifier.layout { measurable, constraints ->
             val full = measurable.measure(constraints.copy(minWidth = 0, maxWidth = (constraints.maxWidth / scale).toInt()))
@@ -220,13 +223,26 @@ internal fun HomePreview(scale: Float = 0.7f) {
                 full.placeWithLayer(0, 0) { scaleX = scale; scaleY = scale; transformOrigin = TransformOrigin(0f, 0f) }
             }
         }) {
-            // The edge inside the preview is the real one minus the screen's own margin, so it fits on this card.
-            HomeTop(time = time, glance = glance, modifier = Modifier.padding(start = 0.dp))
-            Spacer(Modifier.height((hs.gap3).dp))
-            // A drawn copy, not the real stack: Android gives each app widget ONE live view, and a second one here
-            // would leave the widget on his home stale (review, 24 Oct).
-            val widgets = remember { WidgetStore.get(context) }
-            if (widgets.stack.isNotEmpty()) MiniWidgets(widgets, hs, Modifier.padding(start = hs.edge.dp))
+            when (mode) {
+                // 25 Oct (audit P3): Poster and the wheel get their own mini, so the preview shows the home he really has.
+                HomeMode.POSTER -> Box(Modifier.fillMaxWidth().height(260.dp)) {
+                    PosterMiniClock(time, Modifier.align(Alignment.TopCenter).padding(top = 6.dp))
+                    PosterMiniDock(Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp), dot = 44.dp)
+                }
+                HomeMode.WHEEL -> Box(Modifier.fillMaxWidth().height(260.dp)) {
+                    HomeTop(time = time, glance = glance, modifier = Modifier.padding(start = 0.dp))
+                    WheelMiniCorner(left = com.shamil.launcher.ui.rail.RailSide.left, radius = 110.dp)
+                }
+                HomeMode.SEELIE -> {
+                    // The edge inside the preview is the real one minus the screen's own margin, so it fits on this card.
+                    HomeTop(time = time, glance = glance, modifier = Modifier.padding(start = 0.dp))
+                    Spacer(Modifier.height((hs.gap3).dp))
+                    // A drawn copy, not the real stack: Android gives each app widget ONE live view, and a second one here
+                    // would leave the widget on his home stale (review, 24 Oct).
+                    val widgets = remember { WidgetStore.get(context) }
+                    if (widgets.stack.isNotEmpty()) MiniWidgets(widgets, hs, Modifier.padding(start = hs.edge.dp))
+                }
+            }
         }
         Text(
             "LIVE PREVIEW",

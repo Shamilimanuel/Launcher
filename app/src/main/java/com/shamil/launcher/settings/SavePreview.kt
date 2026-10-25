@@ -8,6 +8,8 @@ import com.shamil.launcher.ui.home.DATE_LOOKS
 import com.shamil.launcher.ui.home.HomeBundle
 import com.shamil.launcher.ui.home.HomeLayout
 import com.shamil.launcher.ui.home.HomeLayoutStore
+import com.shamil.launcher.ui.home.HomeMode
+import com.shamil.launcher.ui.home.HomeModeStore
 import com.shamil.launcher.ui.home.HomeStyle
 import com.shamil.launcher.ui.home.LayoutPreset
 import com.shamil.launcher.ui.home.StatKind
@@ -62,6 +64,8 @@ internal class SaveParts(
     val pin: PinLook,
     /** Settings files an older save doesn't hold: applying it keeps his own for those, so the preview shows his own. */
     val notInSave: Set<String>,
+    /** Which home: Seelie's tall page, Poster or the Radial wheel (25 Oct, audit P3: the preview now draws all three). */
+    val mode: HomeMode = HomeMode.SEELIE,
 )
 
 /** The quick toggles row as a save describes it (the store reads the same JSON; this copy never touches the store). */
@@ -154,6 +158,7 @@ private fun readSavePartsOrThrow(context: Context, snapshot: JSONObject, now: JS
         railLeft = bool(RailStore.PREFS, "left") ?: false,
         pin = PinLook.byId(str(PinLookStore.PREFS, "look")),
         notInSave = missing,
+        mode = HomeMode.byId(str(HomeModeStore.PREFS, "mode")),
     )
 }
 
@@ -263,10 +268,19 @@ private fun favWords(p: SaveParts): String = buildString {
     if (!p.layout.favs) { clear(); append("Hidden on the home") }
 }
 
-/** One short line per chip (keys as in [SAVE_LAYERS], plus "type"). */
+/** The home style in a few words (25 Oct, audit P3), for the "Home style" chip and the receipt. */
+private fun modeWords(p: SaveParts): String = when (p.mode) {
+    HomeMode.SEELIE -> "Seelie: the tall page with your clock, widgets, music card and favourites"
+    HomeMode.POSTER -> "Poster: your wallpaper as a painting, a big clock and four apps (no widgets, music card or toggles)"
+    HomeMode.WHEEL -> "Radial wheel: a calm clock, apps in the " + (if (p.railLeft) "bottom-left" else "bottom-right") +
+        " corner wheel (no widgets, music card or toggles)"
+}
+
+/** One short line per chip (keys as in [SAVE_LAYERS], plus "type" and "mode"). */
 internal fun partDetails(p: SaveParts, w: WallInfo): Map<String, String> {
     fun keeps(vararg files: String) = if (files.any { it in p.notInSave }) KEEPS_YOURS else ""
     return mapOf(
+        "mode" to modeWords(p) + keeps(HomeModeStore.PREFS),
         "wall" to wallWords(p, w) + keeps(HomeLayoutStore.PREFS),
         "live" to liveWords(p.live, full = false) + keeps(LiveBgStore.PREFS),
         "clock" to "${p.clock.label} clock · ${pct(p.layout.clockScale)} · ${pct(p.layout.clockTop)} down · ${align(p.layout.alignClock)}. " +
@@ -292,6 +306,7 @@ internal fun receiptRows(p: SaveParts, w: WallInfo): List<Pair<String, String>> 
         when (it) { "top" -> "Clock"; "widgets" -> "Widgets"; "music" -> "Music"; else -> "Favourites" }
     }
     val rows = listOf(
+        "Home style" to modeWords(p),
         "Theme" to p.themeName,
         "Wallpaper" to wallWords(p, w),
         "Living bg" to liveWords(p.live, full = true),
@@ -302,7 +317,8 @@ internal fun receiptRows(p: SaveParts, w: WallInfo): List<Pair<String, String>> 
             "${h.dateSize.roundToInt()} sp · ${h.dateColor}${if (h.dateRule) " · hairline" else ""} · ${align(l.alignDate)}"),
         "Glance line" to (if (!l.glance) "Off" else "${h.glanceStyle} · ${h.glanceColor} · ${align(l.alignGlance)}" +
             if (h.inline) " · beside the date" else ""),
-        "Home style" to "${p.bundle.title}${if (h != p.bundle.style) " (tweaked)" else ""} · ${cardWords(h)}" +
+        // "Home style" above is the home itself (Seelie, Poster, wheel); this row is the bundle of clock and card looks.
+        "Style bundle" to "${p.bundle.title}${if (h != p.bundle.style) " (tweaked)" else ""} · ${cardWords(h)}" +
             (if (h.spirit) " · Seelie spirit" else "") + " · edge ${h.edge} dp",
         "Layout" to "${LayoutPreset.entries.firstOrNull { it.id == l.preset }?.title ?: "Your own"} · $order",
         "Widgets" to (if (l.widgets) "Shown · ${h.cardSize} · today in ${h.cardToday}" else "Off") +

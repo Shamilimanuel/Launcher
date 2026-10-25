@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -98,6 +99,7 @@ import com.shamil.launcher.ui.home.BLOCK_TOP
 import com.shamil.launcher.ui.home.BLOCK_WIDGETS
 import com.shamil.launcher.ui.home.Gold
 import com.shamil.launcher.ui.home.GroupHeading
+import com.shamil.launcher.ui.home.HomeMode
 import com.shamil.launcher.ui.home.HomeStyle
 import com.shamil.launcher.ui.home.HomeTop
 import com.shamil.launcher.ui.home.LocalHomeLayoutOverride
@@ -199,7 +201,7 @@ internal fun SavePhone(
     fun target(key: String): Float = when {
         key in show.hidden -> 0f
         key == "pin" -> if (show.loose) 1f else 0f
-        show.focus == null || show.focus == "type" || show.focus == "pin" || show.focus == key -> 1f
+        show.focus == null || show.focus == "type" || show.focus == "pin" || show.focus == "mode" || show.focus == key -> 1f
         show.focus == "live" && key == "wall" -> 0.4f
         else -> 0.13f
     }
@@ -273,7 +275,6 @@ private fun HomeLayers(
 ) {
     val look = parts.look
     val layout = parts.layout
-    val hs = parts.home
     val time = rememberClockTime()
     // One shared glance for every phone on the page (each card checking the weather itself would add up).
     val glance = LocalPreviewGlance.current ?: rememberGlanceState()
@@ -302,42 +303,133 @@ private fun HomeLayers(
             SaveLiveBg(parts.live, show.live, Modifier.fillMaxSize())
         }
 
-        // 2–5. The blocks in the save's order, like the home: clock, widgets, music, favourites.
-        Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(screenH * layout.clockTop))
-            layout.order.forEach { block ->
-                when (block) {
-                    BLOCK_TOP -> Box(Modifier.fillMaxWidth().pane(2, a("clock"), panes)) {
-                        // Full width, like the home: a centred clock centres on the whole screen.
-                        Column {
-                            HomeTop(time = time, glance = glance)
-                            Spacer(Modifier.height(12.dp))
-                        }
-                    }
-                    BLOCK_WIDGETS -> if (layout.widgets) Box(Modifier.fillMaxWidth().pane(3, a("widgets"), panes)) {
-                        CompositionLocalProvider(LocalLauncherLook provides look.forPart("widgets")) {
-                            SampleWidget(hs, Modifier.padding(start = hs.edge.dp, end = 56.dp, top = (hs.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
-                        }
-                    }
-                    BLOCK_MUSIC -> if (parts.music.show) Box(Modifier.fillMaxWidth().pane(4, a("music"), panes)) {
-                        CompositionLocalProvider(LocalLauncherLook provides look.forPart("widgets")) {
-                            SampleMusic(parts.music, hs, Modifier.padding(start = hs.edge.dp, end = 56.dp, bottom = 8.dp))
-                        }
-                    }
-                    BLOCK_FAVS -> if (layout.favs) Box(Modifier.fillMaxWidth().weight(1f, fill = false).pane(5, a("favs"), panes)) {
-                        // Clipped inside the layer, so the list stops at the phone's bottom edge (the pane outline doesn't).
-                        Box(Modifier.clipToBounds()) { Favourites(parts, favourites) }
-                    }
+        // 2–5, Poster and Radial wheel (25 Oct, audit P3): their own simple picture instead of the tall page's blocks.
+        when (parts.mode) {
+            HomeMode.POSTER -> {
+                Box(Modifier.fillMaxSize().pane(2, a("clock"), panes).posterScrim()) {
+                    PosterMiniClock(time, Modifier.align(Alignment.TopCenter).padding(top = screenH * 0.15f))
+                }
+                Box(Modifier.fillMaxSize().pane(5, a("favs"), panes)) {
+                    PosterMiniDock(Modifier.align(Alignment.BottomCenter).padding(bottom = 78.dp))
                 }
             }
+            HomeMode.WHEEL -> {
+                Box(Modifier.fillMaxSize().pane(2, a("clock"), panes)) {
+                    Column {
+                        Spacer(Modifier.height(screenH * layout.clockTop.coerceIn(0.05f, 0.33f)))
+                        HomeTop(time = time, glance = glance)
+                    }
+                }
+                Box(Modifier.fillMaxSize().pane(5, a("favs"), panes)) {
+                    WheelMiniCorner(left = parts.railLeft, modifier = Modifier.padding(bottom = 24.dp))
+                }
+            }
+            HomeMode.SEELIE -> SeelieBlocks(parts, favourites, alphas, panes, screenH, time, glance)
         }
 
-        // 6. The save's own A–Z rail, where the home puts it.
-        Box(Modifier.fillMaxSize().pane(6, a("rail"), panes)) { RailPicture(parts.rail, screenH) }
+        // 6. The save's own A–Z rail, where the home puts it (in the wheel home an arc rail becomes the edge guide).
+        val rail = if (parts.mode == HomeMode.WHEEL && parts.rail.onArc) RailStyle.GUIDE else parts.rail
+        Box(Modifier.fillMaxSize().pane(6, a("rail"), panes)) { RailPicture(rail, screenH, short = parts.mode == HomeMode.WHEEL) }
 
         // 7. The PIN screen joins the stack in Explode (the chips flip the phone to it instead).
         if (show.loose) Box(Modifier.fillMaxSize().pane(7, a("pin"), panes)) { PinScreen(parts, solid = false) }
     }
+}
+
+/** 2–5 for the Seelie home: the blocks in the save's order, like the home: clock, widgets, music, favourites. */
+@Composable
+private fun SeelieBlocks(
+    parts: SaveParts, favourites: List<AppEntry>, alphas: Map<String, State<Float>>, panes: Panes, screenH: Dp,
+    time: java.time.LocalDateTime, glance: com.shamil.launcher.ui.GlanceState,
+) {
+    val look = parts.look
+    val layout = parts.layout
+    val hs = parts.home
+    fun a(key: String) = alphas.getValue(key)
+    Column(Modifier.fillMaxSize()) {
+        Spacer(Modifier.height(screenH * layout.clockTop))
+        layout.order.forEach { block ->
+            when (block) {
+                BLOCK_TOP -> Box(Modifier.fillMaxWidth().pane(2, a("clock"), panes)) {
+                    // Full width, like the home: a centred clock centres on the whole screen.
+                    Column {
+                        HomeTop(time = time, glance = glance)
+                        Spacer(Modifier.height(12.dp))
+                    }
+                }
+                BLOCK_WIDGETS -> if (layout.widgets) Box(Modifier.fillMaxWidth().pane(3, a("widgets"), panes)) {
+                    CompositionLocalProvider(LocalLauncherLook provides look.forPart("widgets")) {
+                        SampleWidget(hs, Modifier.padding(start = hs.edge.dp, end = 56.dp, top = (hs.gap3 - 12).coerceAtLeast(0).dp, bottom = 8.dp))
+                    }
+                }
+                BLOCK_MUSIC -> if (parts.music.show) Box(Modifier.fillMaxWidth().pane(4, a("music"), panes)) {
+                    CompositionLocalProvider(LocalLauncherLook provides look.forPart("widgets")) {
+                        SampleMusic(parts.music, hs, Modifier.padding(start = hs.edge.dp, end = 56.dp, bottom = 8.dp))
+                    }
+                }
+                BLOCK_FAVS -> if (layout.favs) Box(Modifier.fillMaxWidth().weight(1f, fill = false).pane(5, a("favs"), panes)) {
+                    // Clipped inside the layer, so the list stops at the phone's bottom edge (the pane outline doesn't).
+                    Box(Modifier.clipToBounds()) { Favourites(parts, favourites) }
+                }
+            }
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- the other home styles (25 Oct, audit P3) */
+
+/** Poster's soft dark wash at the top (behind the clock) and the bottom (behind the apps), like PosterHome. */
+private fun Modifier.posterScrim(): Modifier = drawBehind {
+    val h = size.height
+    val scrim = Color(0xFF05070D)
+    drawRect(Brush.verticalGradient(0f to scrim.copy(alpha = 0.38f), 1f to Color.Transparent, startY = 0f, endY = h * 0.45f))
+    drawRect(Brush.verticalGradient(0f to Color.Transparent, 1f to scrim.copy(alpha = 0.6f), startY = h * 0.6f, endY = h))
+}
+
+/** Poster's big Cinzel clock with its accent glow, and the date under it (a picture: nothing to tap). */
+@Composable
+internal fun PosterMiniClock(time: java.time.LocalDateTime, modifier: Modifier = Modifier) {
+    val look = LocalLauncherLook.current
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val is24h = android.text.format.DateFormat.is24HourFormat(context)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            time.format(DateTimeFormatter.ofPattern(if (is24h) "HH:mm" else "h:mm")), maxLines = 1, softWrap = false,
+            style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, fontSize = 92.sp, letterSpacing = 0.02.em,
+                color = look.forPart("clock").text,
+                shadow = with(density) { Shadow(look.accent.copy(alpha = 0.8f), Offset.Zero, 40.dp.toPx()) }),
+        )
+        Text(
+            time.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault())).replace(".", "").uppercase(Locale.getDefault()),
+            maxLines = 1,
+            style = TextStyle(fontFamily = look.font, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, letterSpacing = 0.14.em,
+                color = look.partText["date"] ?: look.accent),
+        )
+    }
+}
+
+/** Poster's four apps at the bottom, drawn as soft round dots. */
+@Composable
+internal fun PosterMiniDock(modifier: Modifier = Modifier, dot: Dp = 60.dp) {
+    val look = LocalLauncherLook.current
+    Row(modifier.fillMaxWidth().padding(horizontal = 18.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+        repeat(4) {
+            Box(Modifier.size(dot).background(look.text.copy(alpha = 0.2f), CircleShape).border(1.dp, look.accent.copy(alpha = 0.5f), CircleShape))
+        }
+    }
+}
+
+/** The wheel's hot corner: a soft accent glow in the bottom corner ([left] = left-hand mode, bottom left). */
+@Composable
+internal fun WheelMiniCorner(left: Boolean, modifier: Modifier = Modifier, radius: Dp = 132.dp) {
+    val look = LocalLauncherLook.current
+    Box(modifier.fillMaxSize().drawBehind {
+        val r = radius.toPx()
+        val c = Offset(if (left) 0f else size.width, size.height)
+        drawCircle(Brush.radialGradient(listOf(look.accent.copy(alpha = 0.55f), look.accent.copy(alpha = 0.16f), Color.Transparent), center = c, radius = r), r, c)
+        drawCircle(look.accent.copy(alpha = 0.7f), r * 0.42f, c, style = Stroke(1.5.dp.toPx()))
+    })
 }
 
 /* ---------------------------------------------------------------- the 3D layers */
@@ -738,7 +830,7 @@ private fun SampleBar(bar: String, accent: Color, track: Color, modifier: Modifi
 
 /** The save's A–Z rail, the real drawing in the same strip the home uses (asleep: it only moves when touched). */
 @Composable
-private fun RailPicture(style: RailStyle, screenH: Dp) {
+private fun RailPicture(style: RailStyle, screenH: Dp, short: Boolean = false) {
     val letters = remember { ('A'..'Z').map { it.toString() }.toSet() + "#" }
     Box(Modifier.fillMaxSize()) {
         when (style) {
@@ -748,7 +840,8 @@ private fun RailPicture(style: RailStyle, screenH: Dp) {
                 val strip = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = screenH * 0.27f)
-                    .height(screenH * 0.64f)
+                    // [short]: in the wheel home the rail ends above the wheel's corner, like the home.
+                    .height(screenH * (if (short) 0.42f else 0.64f))
                     .width(46.dp)
                     .railMirror()
                 val none: (String) -> List<AppEntry> = { emptyList() }

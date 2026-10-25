@@ -10,6 +10,10 @@ import android.provider.AlarmClock
 import android.provider.CalendarContract
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -131,8 +135,8 @@ import kotlin.random.Random
  * Like the rails, everything that moves is a plain field read while drawing: nothing recomposes per frame, and the
  * frame loop sleeps as soon as nothing moves (the closed home draws nothing new at all).
  *
- * Left hand is v1: everything goes through [WheelHomeState.mirrored] / [WheelHomeState.side], so flipping it (from
- * RailSide.left or a setting) moves the corner to the bottom left and mirrors the angles.
+ * Left hand (25 Oct): everything goes through [WheelHomeState.mirrored] / [WheelHomeState.side]; RailSide.left ("Rail
+ * on the left") flips it, which moves the corner to the bottom left and mirrors the angles.
  */
 
 /** The mockup's phone width: one "unit" = screen / 390. */
@@ -276,7 +280,7 @@ private class WheelHomeState(private val scope: CoroutineScope) {
     var usesNow: () -> Map<String, Int> = { emptyMap() }
     private var uses: Map<String, Int> = emptyMap()
 
-    /** v1 hook: true = left-hand wheel in the bottom-left corner. Positions and angles all go through [side]. */
+    /** True = left-hand wheel in the bottom-left corner (follows RailSide.left). Positions and angles all go through [side]. */
     var mirrored = false
     val side: Float get() = if (mirrored) -1f else 1f
 
@@ -723,8 +727,10 @@ object WheelHomeStatus {
  * Radial wheel home: a calm home; hold the bottom corner and flick to a shelf, then to an app.
  * [favourites] = his favourites in order (the first shelf); [apps] = every listed app (vault and hidden apps already
  * removed), sorted A–Z, for the category shelves; [onOpenApp] opens one (vault-guarded, counted);
- * [onAllApps] opens the A–Z list.
+ * [onAllApps] opens the A–Z list. [onHomeSheet]: holding the clock or the calm home opens the "Seelie widget" sheet,
+ * like the tall home (25 Oct, audit P2); [underClock] sits under the clock ("Make me your default home").
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WheelHome(
     favourites: List<AppEntry>,
@@ -733,6 +739,8 @@ fun WheelHome(
     onOpenApp: (AppEntry) -> Unit,
     onAllApps: () -> Unit,
     modifier: Modifier = Modifier,
+    onHomeSheet: () -> Unit = {},
+    underClock: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
     val look = LocalLauncherLook.current
@@ -740,6 +748,14 @@ fun WheelHome(
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val st = remember { WheelHomeState(scope) }
+    // Left-hand mode (25 Oct, audit P4): "Rail on the left" (A–Z rail → Feel → Left thumb) moves the hot corner to
+    // the bottom left and mirrors the wheel. Set here, before anything below reads it, so the corner moves at once.
+    val leftHand = com.shamil.launcher.ui.rail.RailSide.left
+    if (st.mirrored != leftHand) {
+        st.mirrored = leftHand
+        if (st.isOpen) st.closeNow()
+        st.relayout()
+    }
 
     // Which group each app is in: worked out once per app list, off the main thread (it can ask the package manager).
     val groups by produceState<Map<String, List<AppEntry>>?>(initialValue = null, apps) {
@@ -796,12 +812,25 @@ fun WheelHome(
         val now = rememberWheelNow()
         val noRipple = remember { MutableInteractionSource() }
         val screenH = maxHeight
-        Column(Modifier.fillMaxSize()) {
+        val homeSheet by rememberUpdatedState(onHomeSheet)
+        Column(
+            Modifier
+                .fillMaxSize()
+                // Hold the calm home = the "Seelie widget" sheet (settings, Switch Home app). The hot corner sits on top
+                // and keeps its own touches.
+                .pointerInput(Unit) {
+                    detectTapGestures(onLongPress = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        homeSheet()
+                    })
+                }
+        ) {
             Spacer(Modifier.height(screenH * lay.clockTop.coerceIn(0.05f, 0.33f)))
             HomeTop(
                 time = now,
                 glance = glance,
-                clockModifier = Modifier.clickable(interactionSource = noRipple, indication = null) {
+                clockModifier = Modifier.combinedClickable(interactionSource = noRipple, indication = null,
+                    onLongClick = { homeSheet() }) {
                     wheelOpenSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS))
                 },
                 dateModifier = Modifier.clickable(interactionSource = noRipple, indication = null) {
@@ -810,6 +839,7 @@ fun WheelHome(
                     wheelOpenSafely(context, Intent(Intent.ACTION_VIEW, today.build()))
                 },
             )
+            Box(Modifier.padding(start = 30.dp)) { underClock() }
         }
 
         // The wheel layer: draws the corner glow always, and the dim + wheel while open. It only takes touches while

@@ -15,6 +15,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -95,7 +96,8 @@ private const val HINT_TIMES = 6
 /**
  * Poster home: his wallpaper is the painting, with a big clock and four apps.
  * [favourites] = his favourites in order (the first four float at the bottom); [onOpenApp] opens one (vault-guarded,
- * counted); [onAppMenu] = long-press menu; [onAllApps] = swipe up (opens the A–Z list).
+ * counted); [onAppMenu] = long-press menu; [onAllApps] = swipe up (opens the A–Z list); [onHomeSheet] = a long-press
+ * on the clock or the empty painting opens the same "Seelie widget" sheet as the tall home (25 Oct, audit P2).
  */
 @Composable
 fun PosterHome(
@@ -105,10 +107,14 @@ fun PosterHome(
     onAppMenu: (AppEntry) -> Unit,
     onAllApps: () -> Unit,
     modifier: Modifier = Modifier,
+    onHomeSheet: () -> Unit = {},
+    underClock: @Composable () -> Unit = {},
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     // The swipe is set up once; this keeps it calling today's onAllApps, not the first one.
     val allApps by rememberUpdatedState(onAllApps)
+    val homeSheet by rememberUpdatedState(onHomeSheet)
     val swipeFar = with(density) { 56.dp.toPx() }
 
     BoxWithConstraints(
@@ -136,9 +142,21 @@ fun PosterHome(
                     },
                 )
             }
+            // Hold the empty painting = the "Seelie widget" sheet (settings, Switch Home app). The clock and the apps
+            // handle their own touches first, so holding an app still opens its menu.
+            .pointerInput(Unit) {
+                detectTapGestures(onLongPress = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    homeSheet()
+                })
+            }
     ) {
         val screenH = maxHeight
-        PosterClock(glance, Modifier.align(Alignment.TopCenter).padding(top = screenH * CLOCK_TOP))
+        Column(Modifier.align(Alignment.TopCenter).padding(top = screenH * CLOCK_TOP), horizontalAlignment = Alignment.CenterHorizontally) {
+            // Holding the clock opens the sheet too (combinedClickable buzzes by itself on a long press).
+            PosterClock(glance, onLongPress = { homeSheet() })
+            underClock()
+        }
 
         Column(
             Modifier
@@ -183,7 +201,7 @@ fun PosterHome(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PosterClock(glance: GlanceState, modifier: Modifier = Modifier) {
+private fun PosterClock(glance: GlanceState, modifier: Modifier = Modifier, onLongPress: () -> Unit = {}) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val look = LocalLauncherLook.current
@@ -212,7 +230,7 @@ private fun PosterClock(glance: GlanceState, modifier: Modifier = Modifier) {
             Modifier
                 .onceSparkles(Color(0xFFFFF6DC))
                 .pressFeel(press, accent, 28.dp)
-                .combinedClickable(interactionSource = press, indication = null, onClick = {
+                .combinedClickable(interactionSource = press, indication = null, onLongClick = onLongPress, onClick = {
                     openOrNothing(context, Intent(AlarmClock.ACTION_SHOW_ALARMS))
                 })
                 .padding(horizontal = 12.dp)

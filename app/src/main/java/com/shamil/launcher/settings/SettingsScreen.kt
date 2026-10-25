@@ -301,7 +301,8 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
             "Fade" -> LayoutSettingsContent(part = "fade")
         }
         Node.Clock -> when (tab) {
-            "Clock" -> { HomeStyleSettingsContent(part = "clock"); LayoutSettingsContent(part = "clock") }
+            // 25 Oct (audit P1): Poster and the wheel draw their own clock, so its face, place and size are Seelie-only.
+            "Clock" -> { SeelieOnlyHint(); HomeStyleSettingsContent(part = "clock"); LayoutSettingsContent(part = "clock") }
             "Date" -> { HomeStyleSettingsContent(part = "date"); LayoutSettingsContent(part = "date") }
             "Glance line" -> {
                 HomeStyleSettingsContent(part = "glance")
@@ -316,6 +317,7 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
         }
         Node.Widgets -> when (tab) {
             "Stack" -> {
+                SeelieOnlyHint()
                 LayoutSettingsContent(part = "widgets")
                 WidgetStackSettingsContent(onAddFromApp = onPicker)
             }
@@ -329,7 +331,10 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
                 StatsSettingsContent()
             }
         }
-        Node.Music -> MusicSettingsContent(showPreview = false, part = when (tab) { "Cover" -> "cover"; "Controls" -> "controls"; else -> "card" })
+        Node.Music -> {
+            SeelieOnlyHint()
+            MusicSettingsContent(showPreview = false, part = when (tab) { "Cover" -> "cover"; "Controls" -> "controls"; else -> "card" })
+        }
         Node.Favourites -> when (tab) {
             "List" -> {
                 Hint("To pick, search and reorder your favourites: hold the empty space next to the clock → Edit favourites (or long-press an app).")
@@ -341,8 +346,8 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
                 GroupInfo(R.drawable.ic_edit, Geo, "Rename or hide an app", "Long-press the app → Rename, or Hide from app list.")
                 GroupInfo(R.drawable.ic_touch_app, Electro, "Swipe left on an app", "Long-press the app → Swipe left, and pick what a swipe on it does.")
             }
-            "Notifications" -> NotifSettingsContent()
-            "Toggles" -> TogglesSettingsContent()
+            "Notifications" -> { SeelieOnlyHint(); NotifSettingsContent() }
+            "Toggles" -> { SeelieOnlyHint(); TogglesSettingsContent() }
         }
         Node.Rail -> when (tab) {
             "Style" -> {

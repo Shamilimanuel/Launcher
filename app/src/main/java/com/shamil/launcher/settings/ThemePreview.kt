@@ -106,6 +106,8 @@ import kotlinx.coroutines.withContext
 
 /** The chips under the phone: (part, title, icon). */
 private val CHIPS = listOf(
+    // 25 Oct (audit P3): which home the save switches to (Seelie, Poster, Radial wheel).
+    Triple("mode", "Home style", R.drawable.ic_home_filled),
     Triple("wall", "Wallpaper", R.drawable.ic_wallpaper),
     Triple("live", "Living background", R.drawable.ic_partly_cloudy_night),
     Triple("clock", "Clock, date & glance", R.drawable.ic_schedule),

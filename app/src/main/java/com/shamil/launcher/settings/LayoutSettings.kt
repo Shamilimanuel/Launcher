@@ -37,6 +37,8 @@ import com.shamil.launcher.ui.home.BLOCK_MUSIC
 import com.shamil.launcher.ui.home.BLOCK_TOP
 import com.shamil.launcher.ui.home.BLOCK_WIDGETS
 import com.shamil.launcher.ui.home.HomeLayoutStore
+import com.shamil.launcher.ui.home.HomeMode
+import com.shamil.launcher.ui.home.HomeModeStore
 import com.shamil.launcher.ui.home.LayoutPreset
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 import kotlin.math.roundToInt
@@ -105,6 +107,7 @@ fun ColumnScope.LayoutSettingsContent(part: String? = null, onClockFaces: (() ->
 
     if (show("order")) {
         SectionLabel("Blocks, top to bottom")
+        SeelieOnlyHint()
         Hint(if (part == null) "Move a block up or down. Widgets and favourites can be switched off too."
             else "Move a block up or down. Switch widgets off in Widgets → Stack, favourites in Favourites → List.")
         lay.order.forEachIndexed { i, block ->
@@ -148,6 +151,8 @@ fun ColumnScope.LayoutSettingsContent(part: String? = null, onClockFaces: (() ->
     if (show("rail")) {
         SectionLabel(if (part == null) "A–Z rail" else "Rail style")
         Hint("Seelie's own rails, in the order you picked them. The arc ones sit where your thumb rests: drag along the curve to pick a letter (a tap still opens what's under it).")
+        // 25 Oct (audit P4): the wheel's hot corner sits where the arc would, so the home swaps it; say so.
+        Hint("In the Radial wheel home style an arc rail becomes the edge Guide rail, so it stays clear of the wheel's corner.")
         if (part == null) LeftThumb(rails)
         RailStyle.entries.filter { it.built }.forEach { style ->
             PresetRow(style.title, style.about, selected = rails.style == style) { rails.use(style) }
@@ -229,10 +234,23 @@ private fun ArrowButton(glyph: String, enabled: Boolean, onClick: () -> Unit) {
 @Composable
 internal fun HomeModeChoice() {
     val context = LocalContext.current
-    val modes = remember { com.shamil.launcher.ui.home.HomeModeStore.get(context) }
+    val modes = remember { HomeModeStore.get(context) }
     SectionLabel("Home style")
     Hint("How your home works. Your saves remember it, so each save can have its own.")
-    com.shamil.launcher.ui.home.HomeMode.entries.forEach { m ->
+    HomeMode.entries.forEach { m ->
         PresetRow(m.title, m.about, selected = modes.mode == m) { modes.use(m) }
     }
+    // 25 Oct (audit P1): say plainly what the two new styles leave out, so the pages for those don't seem broken.
+    Hint("Poster and Radial wheel leave out the widgets, music card, quick toggles, notification lines, stats card and event line. Those show in the Seelie style.")
+}
+
+/**
+ * "Only used in the Seelie home style" (25 Oct, audit P1): for settings pages that change nothing in Poster or the
+ * Radial wheel. Shows only while one of those is the home style.
+ */
+@Composable
+internal fun SeelieOnlyHint() {
+    val context = LocalContext.current
+    val mode = remember { HomeModeStore.get(context) }.mode
+    if (mode != HomeMode.SEELIE) Hint("Only used in the Seelie home style. Your home is ${mode.title} now (Theme & style → Bundles & layouts).")
 }

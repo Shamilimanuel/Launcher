@@ -341,9 +341,15 @@ fun HomeScreen(state: HomeState, isDefault: Boolean) {
           // Swipe up / "All apps" opens the A–Z list at the top.
           val openApp = { app: AppEntry -> Apps.launch(context, app) }
           val allApps = { onListLetter(lettersWithApps.minOrNull() ?: "A") }
+          // 25 Oct (audit P2): holding the clock or the empty home opens the same "Seelie widget" sheet in every style,
+          // and "Make me your default home" sits under their clock too while Seelie isn't the default yet.
+          val openSheet = { widgetSheet = true }
+          val underClock: @Composable () -> Unit = { if (!isDefault) MakeDefaultButton() }
           when (homeMode) {
-            HomeMode.POSTER -> PosterHome(favouriteApps, glance, onOpenApp = openApp, onAppMenu = openMenu, onAllApps = allApps, modifier = Modifier.fillMaxSize())
-            HomeMode.WHEEL -> WheelHome(favouriteApps, listedApps, glance, onOpenApp = openApp, onAllApps = allApps, modifier = Modifier.fillMaxSize())
+            HomeMode.POSTER -> PosterHome(favouriteApps, glance, onOpenApp = openApp, onAppMenu = openMenu, onAllApps = allApps, modifier = Modifier.fillMaxSize(),
+                onHomeSheet = openSheet, underClock = underClock)
+            HomeMode.WHEEL -> WheelHome(favouriteApps, listedApps, glance, onOpenApp = openApp, onAllApps = allApps, modifier = Modifier.fillMaxSize(),
+                onHomeSheet = openSheet, underClock = underClock)
             HomeMode.SEELIE ->
             Column(
                 Modifier
