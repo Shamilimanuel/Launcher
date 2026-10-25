@@ -619,6 +619,13 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
             }
             item {
                 Column(Modifier.padding(start = 24.dp, end = 12.dp, top = 22.dp)) {
+                    // His find (25 Oct): recent apps skipped the lock. The app-lock watcher closes that (see lock/SeelieLockService).
+                    val everywhere = com.shamil.launcher.lock.SeelieLockService.running
+                    VaultSetting(if (everywhere) "Lock everywhere: on" else "Lock everywhere: off",
+                        if (everywhere) "Locked and vault apps ask for the code from recent apps and notifications too. Switch it off under Accessibility"
+                        else "Without it, recent apps skip the lock. Tap, then switch on \"Seelie app lock\" (it only learns which app is in front)") {
+                        runCatching { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }
                     VaultSetting(if (vault.fingerprint) "Fingerprint: on" else "Fingerprint: off", "Unlock with your fingerprint as well as the PIN") {
                         vault.useFingerprint(!vault.fingerprint)
                     }
@@ -638,7 +645,7 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                     Text("Locked apps can each use any of these codes: long-press an app → Lock with code.",
                         modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 6.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
-                    Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings.",
+                    Text("Honest note: this hides apps inside Seelie. They still exist in your phone's Settings, and recent apps can still show the last picture of a locked app.",
                         modifier = Modifier.padding(start = 8.dp, top = 10.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))
                 }

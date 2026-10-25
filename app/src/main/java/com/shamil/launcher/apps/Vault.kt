@@ -39,7 +39,7 @@ enum class LockCode(val id: String, val title: String) {
 }
 
 /** A locked app waiting for its code: its name (for the screen), which code opens it, and what to do once it's right. */
-class PendingOpen(val label: String, val code: LockCode, val open: () -> Unit)
+class PendingOpen(val label: String, val code: LockCode, val open: () -> Unit, val packageName: String = "")
 
 class VaultStore private constructor(context: Context) {
     private val prefs = context.getSharedPreferences("vault", Context.MODE_PRIVATE)
@@ -132,15 +132,42 @@ class VaultStore private constructor(context: Context) {
      * a tap, search, a gesture, a shortcut, a notification.
      */
     fun guard(packageName: String, label: String, open: () -> Unit) {
-        if (packageName !in locked || !hasPin || unlocked) open() else pending = PendingOpen(label, lockCodeOf(packageName), open)
+        if (packageName !in locked || !hasPin || unlocked) { pass(packageName); open() }
+        else pending = PendingOpen(label, lockCodeOf(packageName), open, packageName)
     }
 
     /** The code was right: open the waiting app, and lock again straight after. */
     fun finishPending() {
-        val action = pending?.open
+        val waiting = pending
         pending = null
         unlocked = false
-        action?.invoke()
+        if (waiting != null) {
+            if (waiting.packageName.isNotEmpty()) pass(waiting.packageName)
+            waiting.open()
+        }
+    }
+
+    /*
+     * The lock watcher (lock/SeelieLockService, 25 Oct): locked apps and vault apps that come to the front any other
+     * way (recent apps, a notification, another app) get the lock too.
+     */
+
+    /** The guarded app he just opened the right way (memory only): the watcher leaves it alone while he's in it. */
+    var passed: String? = null
+    var passedAt = 0L
+        private set
+
+    fun pass(packageName: String) {
+        passed = packageName
+        passedAt = SystemClock.uptimeMillis()
+    }
+
+    /** Apps that need a code wherever they're opened from: locked apps and the apps hidden in the vault. */
+    fun guardsFromOutside(packageName: String) = hasPin && (packageName in locked || packageName in apps)
+
+    /** A guarded app came to the front by itself: ask for its code (a vault app: the vault's code), then [open] it. */
+    fun askFromOutside(packageName: String, label: String, open: () -> Unit) {
+        pending = PendingOpen(label, if (packageName in locked) lockCodeOf(packageName) else vaultCode, open, packageName)
     }
 
     fun cancelPending() {

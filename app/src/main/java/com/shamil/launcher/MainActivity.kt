@@ -83,8 +83,9 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         inFront = false
         SeelieWidgetHost.stop(this)
-        // Leaving the home (an app opens, the screen goes off) locks the vault again.
+        // Leaving the home (an app opens, the screen goes off) locks the vault again, and drops a waiting lock screen.
         VaultStore.get(this).lock()
+        VaultStore.get(this).cancelPending()
     }
 
     override fun onResume() {
