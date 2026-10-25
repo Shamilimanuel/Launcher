@@ -13,7 +13,6 @@ import android.hardware.biometrics.BiometricManager
 import android.hardware.biometrics.BiometricPrompt
 import android.os.Build
 import android.os.CancellationSignal
-import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -162,25 +161,50 @@ private fun CodeKindChooser(onPick: (String) -> Unit) {
 private fun PasswordSetup(onDone: () -> Unit, forVault: Boolean = true) {
     val context = LocalContext.current
     val vault = remember { VaultStore.get(context) }
+    val scope = rememberCoroutineScope()
     var first by remember { mutableStateOf<String?>(null) }
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     PasswordLayout(
         title = if (first == null) "Make your password" else "Type it once more",
-        sub = message ?: if (first == null) "Letters, numbers, symbols, any length (at least 4)." else "To be sure it's right.",
+        sub = if (saving) "Saving…" else message ?: if (first == null) "Letters, numbers, symbols, any length (at least 4)." else "To be sure it's right.",
         value = entry,
-        onValue = { entry = it; message = null },
-        canSubmit = entry.length >= 4,
+        onValue = { if (!saving) { entry = it; message = null } },
+        canSubmit = entry.length >= 4 && !saving,
         onSubmit = {
             val f = first
             when {
+                saving -> {}
                 f == null -> { first = entry; entry = "" }
-                f == entry -> { vault.setPin(entry, password = true, forVault = forVault); onDone() }
+                // The slow hash runs in the background (25 Oct, audit S9): "Saving…" meanwhile.
+                f == entry -> { saving = true; scope.launch { vault.setPin(entry, password = true, forVault = forVault); onDone() } }
                 else -> { first = null; entry = ""; message = "They didn't match. Start again." }
             }
         },
     )
 }
+
+/**
+ * How many seconds of the wrong-tries wait are left (0 = he can try), counting down once a second (25 Oct, audit S7:
+ * the wait now survives Force stop and grows, 30 s, 5 min, 1 h, so the screen shows how long is left).
+ */
+@Composable
+private fun rememberWaitSeconds(vault: VaultStore): Int {
+    var left by remember { mutableIntStateOf(0) }
+    LaunchedEffect(vault.lockedUntil) {
+        while (true) {
+            val ms = vault.lockWaitMs()
+            left = ((ms + 999) / 1000).toInt()
+            if (ms <= 0) break
+            delay(((ms - 1) % 1000) + 1)
+        }
+    }
+    return left
+}
+
+/** "Too many tries. Try again in 4:59". */
+private fun waitLine(seconds: Int) = "Too many tries. Try again in %d:%02d".format(seconds / 60, seconds % 60)
 
 /** Unlock with the password (+ fingerprint, which pops up by itself when it's on). */
 @Composable
@@ -191,24 +215,33 @@ private fun PasswordUnlock(vault: VaultStore, title: String = "Vault") {
     val shake = remember { Animatable(0f) }
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    val wait = rememberWaitSeconds(vault)
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
     LaunchedEffect(Unit) { if (canFinger) askFingerprint(context, vault, title) }
     PasswordLayout(
         title = title,
-        sub = message ?: "Type your password",
+        sub = when {
+            wait > 0 -> waitLine(wait)
+            vault.checking -> "Checking…"
+            else -> message ?: "Type your password"
+        },
         value = entry,
-        onValue = { entry = it; message = null },
-        canSubmit = entry.isNotEmpty(),
+        onValue = { if (!vault.checking) { entry = it; message = null } },
+        canSubmit = entry.isNotEmpty() && !vault.checking,
         offset = shake.value,
         onFinger = if (canFinger) ({ askFingerprint(context, vault, title) }) else null,
         onSubmit = {
-            if (SystemClock.uptimeMillis() < vault.lockedUntil) {
-                message = "Too many tries. Wait a moment."
-            } else if (!vault.tryCode(entry, LockCode.PASSWORD)) {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Wrong password"
-                entry = ""
-                scope.launch { for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f)) }
+            if (vault.checking) return@PasswordLayout
+            if (vault.lockWaitMs() > 0) { entry = ""; return@PasswordLayout }
+            val tried = entry
+            // Checked in the background (25 Oct, audit S9), so the screen never freezes; "Checking…" meanwhile.
+            scope.launch {
+                if (!vault.tryCode(tried, LockCode.PASSWORD)) {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    message = "Wrong password"
+                    entry = ""
+                    for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
+                }
             }
         },
     )
@@ -272,9 +305,10 @@ private fun PasswordLayout(
 }
 
 /**
- * Every unlock screen. [code] = what opens it (null = the vault itself). The vault and fun-locked apps show his fun
- * lock first ("Use PIN" on it goes to the vault's code, the backup); a small "✦ Fun lock" chip goes back to the game.
- * Apps locked with the PIN or the password just ask for that one.
+ * Every unlock screen. [code] = what opens it (null = the vault itself). Fun-locked apps show his fun lock first ("Use
+ * PIN" on it goes to the vault's code, the backup); a small "✦ Fun lock" chip goes back to the game. The vault itself
+ * and apps locked with the PIN or the password just ask for that one (25 Oct, audit S8: the fun lock has far fewer
+ * combos than a PIN, so it opens locked apps only, never the vault).
  */
 @Composable
 private fun Unlock(vault: VaultStore, title: String = "Vault", code: LockCode? = null) {
@@ -288,7 +322,7 @@ private fun Unlock(vault: VaultStore, title: String = "Vault", code: LockCode? =
         }
     }
     val kind = FunLockKind.byId(vault.gameKind)
-    val wantsGame = kind != null && (code == null || code == LockCode.FUN)
+    val wantsGame = kind != null && code == LockCode.FUN
     var game by remember { mutableStateOf(true) }
     if (wantsGame && game) {
         FunLockUnlock(vault, kind!!, title, onUsePin = { game = false })
@@ -312,25 +346,35 @@ private fun Unlock(vault: VaultStore, title: String = "Vault", code: LockCode? =
 private fun FunLockUnlock(vault: VaultStore, kind: FunLockKind, title: String, onUsePin: () -> Unit) {
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
     var wrongTick by remember { mutableIntStateOf(0) }
     var okTick by remember { mutableIntStateOf(0) }
+    val wait = rememberWaitSeconds(vault)
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
     FunLockGame(
         kind = kind,
         title = title,
-        sub = message ?: kind.prompt,
+        sub = when {
+            wait > 0 -> waitLine(wait)
+            vault.checking -> "Checking…"
+            else -> message ?: kind.prompt
+        },
         codeLength = kind.codeLength,
         wrongTick = wrongTick,
         okTick = okTick,
         onCode = { code ->
             when {
-                SystemClock.uptimeMillis() < vault.lockedUntil -> { message = "Too many tries. Wait a moment."; wrongTick++ }
-                vault.tryGame(code) -> { message = null; okTick++ }
-                else -> {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Not quite. Try again."
-                    wrongTick++
+                vault.checking -> {}   // one check at a time; the game clears itself
+                vault.lockWaitMs() > 0 -> wrongTick++
+                // Checked in the background (25 Oct, audit S9); the game's answer just comes a moment later.
+                else -> scope.launch {
+                    if (vault.tryGame(code)) { message = null; okTick++ }
+                    else {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        message = "Not quite. Try again."
+                        wrongTick++
+                    }
                 }
             }
         },
@@ -376,22 +420,26 @@ fun LockGate(label: String, code: LockCode) {
 private fun NumberSetup(onDone: () -> Unit, forVault: Boolean = true) {
     val context = LocalContext.current
     val vault = remember { VaultStore.get(context) }
+    val scope = rememberCoroutineScope()
     var first by remember { mutableStateOf<String?>(null) }
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     PadLayout(
         title = if (first == null) "Make your vault PIN" else "Type it once more",
-        sub = message ?: if (first == null) "4 to 6 digits. Only a scrambled hash is kept." else "To be sure it's right.",
+        sub = if (saving) "Saving…" else message ?: if (first == null) "4 to 6 digits. Only a scrambled hash is kept." else "To be sure it's right.",
         entry = entry,
         maxDigits = 6,
-        onDigit = { if (entry.length < 6) entry += it },
-        onDelete = { entry = entry.dropLast(1) },
-        doneLabel = if (entry.length >= 4) "OK" else null,
+        onDigit = { if (entry.length < 6 && !saving) entry += it },
+        onDelete = { if (!saving) entry = entry.dropLast(1) },
+        doneLabel = if (entry.length >= 4 && !saving) "OK" else null,
         onDone = {
             val f = first
             when {
+                saving -> {}
                 f == null -> { first = entry; entry = ""; message = null }
-                f == entry -> { vault.setPin(entry, forVault = forVault); onDone() }
+                // The slow hash runs in the background (25 Oct, audit S9): "Saving…" meanwhile.
+                f == entry -> { saving = true; scope.launch { vault.setPin(entry, forVault = forVault); onDone() } }
                 else -> { first = null; entry = ""; message = "They didn't match. Start again." }
             }
         },
@@ -409,23 +457,26 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
     var message by remember { mutableStateOf<String?>(null) }
     // Goes up on every wrong PIN, in the same moment the entry clears (the Seelie dots scatter on it).
     var wrongTick by remember { mutableIntStateOf(0) }
+    val wait = rememberWaitSeconds(vault)
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
     fun askFinger() = askFingerprint(context, vault, title)
     LaunchedEffect(Unit) { if (canFinger) askFinger() }
 
     fun check() {
-        if (SystemClock.uptimeMillis() < vault.lockedUntil) {
-            message = "Too many tries. Wait a moment."
+        if (vault.checking) return
+        if (vault.lockWaitMs() > 0) {
             entry = ""
             return
         }
-        if (!vault.tryCode(entry, LockCode.PIN)) {
-            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-            message = if (SystemClock.uptimeMillis() < vault.lockedUntil) "Too many tries. Wait 30 seconds." else "Wrong PIN"
-            entry = ""
-            wrongTick++
-            // A little shake, like a head saying "no".
-            scope.launch {
+        val tried = entry
+        // Checked in the background (25 Oct, audit S9), so the pad never freezes; the dots stay and it says "Checking…".
+        scope.launch {
+            if (!vault.tryCode(tried, LockCode.PIN)) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                message = "Wrong PIN"
+                entry = ""
+                wrongTick++
+                // A little shake, like a head saying "no".
                 for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
             }
         }
@@ -433,18 +484,24 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
 
     PadLayout(
         title = title,
-        sub = message ?: "Type your PIN",
+        sub = when {
+            wait > 0 -> waitLine(wait)
+            vault.checking -> "Checking…"
+            else -> message ?: "Type your PIN"
+        },
         entry = entry,
         maxDigits = 6,
         dotsOffset = shake.value,
         onDigit = {
-            if (entry.length < 6) entry += it
-            message = null
-            // The last digit checks it by itself, like a phone's lock screen.
-            if (vault.pinLength > 0 && entry.length == vault.pinLength) check()
+            if (!vault.checking) {
+                if (entry.length < 6) entry += it
+                message = null
+                // The last digit checks it by itself, like a phone's lock screen.
+                if (vault.pinLength > 0 && entry.length == vault.pinLength) check()
+            }
         },
-        onDelete = { entry = entry.dropLast(1) },
-        doneLabel = if (vault.pinLength == 0 && entry.length >= 4) "OK" else null,
+        onDelete = { if (!vault.checking) entry = entry.dropLast(1) },
+        doneLabel = if (vault.pinLength == 0 && entry.length >= 4 && !vault.checking) "OK" else null,
         onDone = { check() },
         // As many dots as his PIN has digits (4 until Seelie knows the length), not always six.
         dotCount = if (vault.pinLength > 0) vault.pinLength else 4,
@@ -673,8 +730,9 @@ private fun VaultContent(vault: VaultStore, allApps: List<AppEntry>, onClose: ()
                         if (vault.hasPassword) "Tap to change it" else "Letters, numbers, symbols, any length") { making = "password" }
                     val pinLooks = remember { PinLookStore.get(context) }
                     VaultSetting("PIN look: " + pinLooks.look.title, "Tap to try the next look: Compact glass, Seelie dots, Light trail, Round") { pinLooks.next() }
+                    // 25 Oct (audit S8): the fun lock opens locked apps only, never the vault itself.
                     VaultSetting("Fun lock: " + (FunLockKind.byId(vault.gameKind)?.title ?: "off"),
-                        "A little game as an extra way in: elements, seelies or lanterns. Your PIN keeps working.") { settingFunLock = true }
+                        "For locked apps only: a little game (elements, seelies or lanterns) as an app's code; the vault always takes your PIN or password.") { settingFunLock = true }
                     Text("Locked apps can each use any of these codes: long-press an app → Lock with code.",
                         modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 6.dp),
                         style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 12.sp))

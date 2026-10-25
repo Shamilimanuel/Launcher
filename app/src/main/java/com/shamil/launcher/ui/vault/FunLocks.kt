@@ -22,7 +22,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +43,9 @@ import com.shamil.launcher.ui.theme.Cinzel
 import com.shamil.launcher.ui.theme.LocalLauncherLook
 
 /*
- * The fun locks (24 Oct, from the PIN looks page): little games as an EXTRA way into the vault. The PIN always stays
- * as the backup ("Use PIN" on every game). He liked these three. The ids are what gets saved, so never rename them.
+ * The fun locks (24 Oct, from the PIN looks page): little games as a code for locked apps. Since 25 Oct (audit S8) they
+ * never open the vault itself (far fewer combos than a PIN). The PIN always stays as the backup ("Use PIN" on every
+ * game). He liked these three. The ids are what gets saved, so never rename them.
  */
 enum class FunLockKind(val id: String, val title: String, val about: String, val prompt: String) {
     ELEMENTS("elements", "Elemental combo", "Tap 4 to 6 elements in your own order", "Cast your elemental combo"),
@@ -94,12 +97,12 @@ private fun FunLockChooser(vault: VaultStore, onPick: (FunLockKind) -> Unit, onD
         Text("Fun lock", style = TextStyle(fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, color = look.accent, fontSize = 28.sp,
             shadow = Shadow(look.accent.copy(alpha = 0.4f), blurRadius = 22f)))
         Spacer(Modifier.height(6.dp))
-        Text(if (current == null) "A little game as an extra way in. Your PIN still works too."
-            else "Now: ${current.title}. Pick one to make a new code.",
+        Text(if (current == null) "For locked apps only: a little game as an app's code. The vault keeps your PIN or password."
+            else "Now: ${current.title} (for locked apps only). Pick one to make a new code.",
             textAlign = TextAlign.Center, style = TextStyle(fontFamily = look.font, color = look.textDim, fontSize = 14.sp))
         Spacer(Modifier.height(22.dp))
         FunLockKind.entries.forEach { k -> FunCard(k.title + if (k == current) "  ✓" else "", k.about) { onPick(k) } }
-        if (current != null) FunCard("Turn the fun lock off", "Back to only your PIN (and fingerprint)", quiet = true) {
+        if (current != null) FunCard("Turn the fun lock off", "Apps locked with it go back to the vault's code", quiet = true) {
             vault.removeGameLock(); onDone()
         }
         FunCard("Cancel", "Keep it as it is", quiet = true, onClick = onDone)
@@ -113,20 +116,24 @@ private fun FunLockMake(vault: VaultStore, kind: FunLockKind, onBack: () -> Unit
     var message by remember { mutableStateOf<String?>(null) }
     var wrongTick by remember { mutableIntStateOf(0) }
     var okTick by remember { mutableIntStateOf(0) }
+    var saving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     androidx.activity.compose.BackHandler(onBack = onBack)
     FunLockGame(
         kind = kind,
         title = if (first == null) "Make your code" else "Once more",
-        sub = message ?: if (first == null) kind.about else "Play the same code again, to be sure.",
+        sub = if (saving) "Saving…" else message ?: if (first == null) kind.about else "Play the same code again, to be sure.",
         codeLength = 0,
         wrongTick = wrongTick,
         okTick = okTick,
         onCode = { code ->
             val f = first
             when {
+                saving -> {}
                 // The first go: no tick, the game clears itself for the second go.
                 f == null -> { first = code; message = null }
-                f == code -> { vault.setGameLock(kind.id, code); okTick++ }
+                // The slow hash runs in the background (25 Oct, audit S9).
+                f == code -> { saving = true; scope.launch { vault.setGameLock(kind.id, code); okTick++ } }
                 else -> { first = null; message = "They didn't match. Start again."; wrongTick++ }
             }
         },
