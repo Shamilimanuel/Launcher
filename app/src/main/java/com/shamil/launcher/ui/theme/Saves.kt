@@ -169,6 +169,7 @@ class SavesStore private constructor(private val context: Context) {
         RailStore.get(context).reload()
         PinLookStore.get(context).reload()
         com.shamil.launcher.ui.home.HomeModeStore.get(context).reload()
+        com.shamil.launcher.night.NightStore.get(context).reload()
     }
 
     /** What the look settings hold right now, in a save's snapshot shape (read only: the previews compare against it). */
@@ -241,7 +242,9 @@ class SavesStore private constructor(private val context: Context) {
     companion object {
         private const val KEY = "list"
         /** The settings files a save captures (only looks, never his apps, notes, vault or widgets). */
-        private val FILES = listOf("look", "home_style", "clock", "stats_card", "music_card", "quick_toggles", LiveBgStore.PREFS, HomeLayoutStore.PREFS, RailStore.PREFS, PinLookStore.PREFS, com.shamil.launcher.ui.home.HomeModeStore.PREFS)
+        private val FILES = listOf("look", "home_style", "clock", "stats_card", "music_card", "quick_toggles", LiveBgStore.PREFS, HomeLayoutStore.PREFS, RailStore.PREFS, PinLookStore.PREFS, com.shamil.launcher.ui.home.HomeModeStore.PREFS,
+            // 25 Oct: the night screen's look (pages, sky, widgets, dimming). Its photo itself stays one file for all saves.
+            com.shamil.launcher.night.NightStore.PREFS)
         @Volatile private var instance: SavesStore? = null
 
         fun get(context: Context): SavesStore =

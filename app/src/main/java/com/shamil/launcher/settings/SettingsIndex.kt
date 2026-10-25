@@ -62,7 +62,12 @@ internal val SETTINGS_INDEX = listOf(
     hit("Spacing: clock, date, line, widget, left edge", Node.Clock, "Spacing", "spacing ruimte afstand gap tussenruimte edge rand margin marge"),
     hit("Seelie spirit: breathing colon + sparkle", Node.Clock, "Spacing", "spirit geest colon dubbelepunt breathing ademen touch"),
     hit("Sparkles by the clock", Node.Clock, "Spacing", "sparkles sterretjes glitter twinkle fonkelen"),
-    hit("Night screen while charging (test)", Node.Clock, "Night screen", "night nacht screen saver schermbeveiliging standby dream charging opladen bedside nachtkastje dock clock klok", R.drawable.ic_clear_night, Cryo),
+    hit("Night screen while charging", Node.Clock, "Night screen", "night nacht screen saver schermbeveiliging standby dream charging opladen bedside nachtkastje dock clock klok choose kies", R.drawable.ic_clear_night, Cryo),
+    hit("Night screen pages: StandBy, trail, rainy window, music, photo, clock", Node.Clock, "Night screen", "pages paginas swipe vegen order volgorde on off aan uit standby trail spoor window raam regen rain music muziek photo foto clock klok", R.drawable.ic_clear_night, Cryo),
+    hit("Night screen sky", Node.Clock, "Night screen", "sky lucht hemel constellation sterrenbeeld starfall aurora noorderlicht dusk schemering fireflies vuurvliegjes lanterns lantaarns petals bloemblaadjes rain regen", R.drawable.ic_clear_night, Cryo),
+    hit("Night screen widgets (StandBy slots)", Node.Clock, "Night screen", "widgets slots cards kaarten weather weer event afspraak alarm wekker battery batterij accu music muziek sunrise zonsopgang tomorrow morgen", R.drawable.ic_widgets, Cryo),
+    hit("Night screen photo", Node.Clock, "Night screen", "photo foto picture afbeelding gallery galerij frame lijst", R.drawable.ic_wallpaper, Cryo),
+    hit("Night screen dimming, bedtime and Late mode", Node.Clock, "Night screen", "dim dimmen donker dark room kamer light licht sensor bedtime bedtijd late laat red rood night nacht burn-in inbranden", R.drawable.ic_clear_night, Cryo),
 
     // ---- Widgets
     hit("Widget stack: order, size, remove", Node.Widgets, "Stack", "widget widgets stack stapel order volgorde remove verwijderen size grootte reset calendar kalender month maand gauges meters notes notities week"),
