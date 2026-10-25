@@ -407,7 +407,6 @@ private fun ColumnScope.NodeContent(node: Node, tab: String?, looks: LookStore, 
             "Backup & share" -> {
                 GroupCard(R.drawable.ic_history, Dendro, "Backup & restore", "Everything in one file, back in one tap", soon = true)
                 GroupCard(R.drawable.ic_star, Geo, "Share or import a theme", "As a file or a link", soon = true)
-                Hint("Import from Niagara (your favourites and their names) works from a computer for now.")
             }
         }
         Node.About -> {

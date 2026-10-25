@@ -113,12 +113,6 @@
             </intent-filter>
         </activity>
 
-        <!-- One-off Niagara import, sent over adb only (DUMP is a shell/system-only permission). -->
-        <receiver
-            android:name=".apps.NiagaraImport"
-            android:exported="true"
-            android:permission="android.permission.DUMP" />
-
         <!--
             Seelie's volume buttons: an Accessibility service that ONLY hears the + / - keys (no screen content, no
             events) and shows Seelie's side bar instead of the phone's. Works after he switches it on under

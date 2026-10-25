@@ -54,7 +54,8 @@ object SafeMode {
     const val EXTRA_RESCUE = "seelie.rescue"
     private const val PREFS = "safe_mode"
     private const val KEY_TIMES = "crash_times"
-    private const val KEY_NOTE = "crash_note"
+    private const val KEY_NOTE = "crash_note_short"
+    private const val OLD_KEY_NOTE = "crash_note"
     /** Two crashes this close together count as "it keeps crashing". */
     private const val WINDOW_MS = 60_000L
 
@@ -65,20 +66,32 @@ object SafeMode {
         if (installed) return
         installed = true
         val app = context.applicationContext
+        // A note from before 25 Oct could hold up to 300 characters of the error message: drop it (audit S19).
+        runCatching { app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).let { if (it.contains(OLD_KEY_NOTE)) it.edit { remove(OLD_KEY_NOTE) } } }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching {
                 val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 val times = (prefs.getString(KEY_TIMES, "") ?: "").split(',').mapNotNull { it.toLongOrNull() }.takeLast(2) + System.currentTimeMillis()
-                val where = error.stackTrace.take(8).joinToString("\n") { "  at ${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})" }
                 // commit, not apply: the process is about to die, so it must be written now.
                 prefs.edit(commit = true) {
                     putString(KEY_TIMES, times.joinToString(","))
-                    putString(KEY_NOTE, "${error.javaClass.name}: ${error.message.orEmpty().take(300)}\n$where")
+                    putString(KEY_NOTE, noteFor(error))
                 }
             }
             previous?.uncaughtException(thread, error)
         }
+    }
+
+    /**
+     * The crash note (25 Oct, audit S19): only the error's type, a scrubbed and short message, and the first lines of
+     * where it happened (class, method, line). Runs of more than 3 digits become # (a phone number, a code, an id
+     * could sit in an error message) and the message stops at 120 characters.
+     */
+    private fun noteFor(error: Throwable): String {
+        val message = error.message.orEmpty().replace(Regex("\\d{4,}"), "#").replace('\n', ' ').take(120)
+        val where = error.stackTrace.take(8).joinToString("\n") { "  at ${it.className}.${it.methodName}:${it.lineNumber}" }
+        return error.javaClass.name + (if (message.isNotBlank()) ": $message" else "") + "\n" + where
     }
 
     /** It crashed twice within a minute, the last one just now: show the rescue screen. */

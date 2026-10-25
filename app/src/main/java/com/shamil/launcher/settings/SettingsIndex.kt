@@ -137,7 +137,6 @@ internal val SETTINGS_INDEX = listOf(
     hit("Save the current look", Node.Saves, "Saves", "save opslaan current huidige look theme thema", R.drawable.ic_star, Geo),
     hit("Backup & restore", Node.Saves, "Backup & share", "backup back-up restore herstellen file bestand"),
     hit("Share or import a theme", Node.Saves, "Backup & share", "share delen import importeren file bestand link"),
-    hit("Import from Niagara", Node.Saves, "Backup & share", "niagara import importeren favourites favorieten names namen"),
 
     // ---- About
     hit("Default home app", Node.About, null, "home launcher default standaard startscherm niagara switch wissel", R.drawable.ic_home),

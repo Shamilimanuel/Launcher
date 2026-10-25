@@ -152,7 +152,7 @@ fun ColumnScope.TogglesSettingsContent() {
     Hint("Seelie's side bar slides in from the edge when you press the phone's volume buttons, in any app, or tap Volume here.")
     if (!com.shamil.launcher.volume.SeelieVolumeService.running) {
         Hint("For the volume buttons, Android wants Seelie switched on under Accessibility → Installed apps → Seelie. " +
-            "Seelie only listens to the two volume buttons there, nothing else. With the screen off, during calls and while " +
+            "Seelie listens only to the two volume buttons and ignores every other key. With the screen off, during calls and while " +
             "the phone rings, the phone's own volume stays.")
         LinkChip("Turn on in Android settings") { ToggleActions.open(context, android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
     } else if (s.volumeLook == VolumeLook.SYSTEM.id) {
