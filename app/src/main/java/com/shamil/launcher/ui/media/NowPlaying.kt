@@ -93,6 +93,24 @@ class NowPlaying internal constructor(
     fun seekTo(ms: Long) { runCatching { controls.seekTo(ms.coerceAtLeast(0L)) } }
 
     /**
+     * The cover at up to [maxPx] pixels (25 Oct, for the night screen's big Music page: [art] is shrunk for the home
+     * card and looks soft that big). Slow-ish: call it off the main thread. Null when the app gives no picture.
+     */
+    fun bigArt(context: Context, maxPx: Int): ImageBitmap? = runCatching {
+        val meta = controller.metadata ?: return@runCatching null
+        val source = meta.artBitmap() ?: meta.artUri()?.let { loadArtUri(context, it, maxPx) } ?: return@runCatching null
+        val readable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && source.config == Bitmap.Config.HARDWARE) {
+            source.copy(Bitmap.Config.ARGB_8888, false)
+        } else source
+        if (readable == null || readable.isRecycled || readable.width <= 0 || readable.height <= 0) return@runCatching null
+        val biggest = max(readable.width, readable.height)
+        val sized = if (biggest > maxPx) {
+            Bitmap.createScaledBitmap(readable, readable.width * maxPx / biggest, readable.height * maxPx / biggest, true)
+        } else readable
+        sized.asImageBitmap()
+    }.getOrNull()
+
+    /**
      * Opens the music app, on its own "now playing" screen when it offers one. Through the lock (25 Oct, audit S2):
      * a locked or vault music app asks for its code first.
      */
@@ -464,7 +482,7 @@ private fun prepareArt(context: Context, bitmap: Bitmap?, uri: String?): ArtInfo
 }.getOrNull()
 
 /** Some apps give a link to the cover instead of the picture. Only links on the phone itself, never the internet. */
-private fun loadArtUri(context: Context, text: String): Bitmap? {
+private fun loadArtUri(context: Context, text: String, targetPx: Int = ART_PX): Bitmap? {
     val uri = Uri.parse(text)
     if (uri.scheme !in setOf("content", "android.resource", "file")) return null
     val resolver = context.contentResolver
@@ -473,7 +491,7 @@ private fun loadArtUri(context: Context, text: String): Bitmap? {
     resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
     var sample = 1
-    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= ART_PX) sample *= 2
+    while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= targetPx) sample *= 2
     val options = BitmapFactory.Options().apply { inSampleSize = sample }
     return resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
 }

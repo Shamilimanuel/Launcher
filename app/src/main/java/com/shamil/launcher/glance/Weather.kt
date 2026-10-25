@@ -27,8 +27,23 @@ data class HourForecast(val hour: String, val code: Int, val isDay: Boolean, val
     @get:DrawableRes val icon: Int get() = iconFor(code, isDay)
 }
 
-/** The weather right now plus the next few hours. [code] is the standard "WMO" weather code Open-Meteo uses. */
-data class Weather(val temp: Int, val code: Int, val isDay: Boolean, val hours: List<HourForecast>, val fetchedAt: Long) {
+/**
+ * One day of the forecast (25 Oct, for the night screen's Sunrise and Tomorrow cards): its weather, highest and lowest
+ * temperature, and sunrise/sunset as "07:48" in the place's own time. Empty strings when Open-Meteo gave none.
+ */
+data class DayForecast(val date: String, val code: Int, val max: Int, val min: Int, val sunrise: String, val sunset: String) {
+    val description: String get() = describe(code)
+    @get:DrawableRes val icon: Int get() = iconFor(code, true)
+}
+
+/**
+ * The weather right now plus the next few hours. [code] is the standard "WMO" weather code Open-Meteo uses.
+ * [days] = today and tomorrow (empty in weather saved before 25 Oct).
+ */
+data class Weather(
+    val temp: Int, val code: Int, val isDay: Boolean, val hours: List<HourForecast>, val fetchedAt: Long,
+    val days: List<DayForecast> = emptyList(),
+) {
     val description: String get() = describe(code)
     @get:DrawableRes val icon: Int get() = iconFor(code, isDay)
 }
@@ -55,10 +70,15 @@ object WeatherSource {
     fun cached(context: Context): Weather? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)?.let { parse(it) }
 
+    /** Whether the saved answer was asked with the daily part (25 Oct); older ones are fetched once more. */
+    private fun cachedAskedDaily(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)?.contains("\"daily\"") == true
+
     /** Fresh weather if the saved one is older than 30 minutes; otherwise the saved one. Null if it can't get any. */
     suspend fun load(context: Context): Weather? {
         val saved = cached(context)
-        if (saved != null && System.currentTimeMillis() - saved.fetchedAt < MAX_AGE_MS) return saved
+        // (25 Oct: weather saved before the daily part existed is fetched once more, so Sunrise/Tomorrow can show.)
+        if (saved != null && cachedAskedDaily(context) && System.currentTimeMillis() - saved.fetchedAt < MAX_AGE_MS) return saved
         if (!hasPermission(context)) return saved
         val location = roughLocation(context) ?: return saved
         return withContext(Dispatchers.IO) {
@@ -68,7 +88,8 @@ object WeatherSource {
                 val url = URL(
                     "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
                         "&current=temperature_2m,weather_code,is_day" +
-                        "&hourly=temperature_2m,weather_code,is_day&forecast_hours=9&timezone=auto"
+                        "&hourly=temperature_2m,weather_code,is_day&forecast_hours=9" +
+                        "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=2&timezone=auto"
                 )
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 8000
@@ -111,10 +132,31 @@ object WeatherSource {
             isDay = current.getInt("is_day") == 1,
             hours = hours,
             fetchedAt = root.optLong("fetchedAt", 0L),
+            days = parseDays(root),
         )
     } catch (e: Exception) {
         null
     }
+
+    /** Today and tomorrow from the "daily" part; an empty list when it's missing or broken (the rest still works). */
+    private fun parseDays(root: JSONObject): List<DayForecast> = runCatching {
+        val daily = root.optJSONObject("daily") ?: return@runCatching emptyList()
+        val dates = daily.getJSONArray("time")
+        val codes = daily.getJSONArray("weather_code")
+        val highs = daily.getJSONArray("temperature_2m_max")
+        val lows = daily.getJSONArray("temperature_2m_min")
+        val rises = daily.optJSONArray("sunrise")
+        val sets = daily.optJSONArray("sunset")
+        // "2026-10-25T07:48" → "07:48"
+        fun hm(text: String?) = text?.takeIf { it.length >= 16 }?.substring(11, 16).orEmpty()
+        (0 until dates.length()).map { i ->
+            DayForecast(
+                date = dates.getString(i), code = codes.getInt(i),
+                max = highs.getDouble(i).roundToInt(), min = lows.getDouble(i).roundToInt(),
+                sunrise = hm(rises?.optString(i)), sunset = hm(sets?.optString(i)),
+            )
+        }
+    }.getOrDefault(emptyList())
 
     /**
      * The phone's last known rough location; if it has none, asks for a fresh one (max 15 s).
