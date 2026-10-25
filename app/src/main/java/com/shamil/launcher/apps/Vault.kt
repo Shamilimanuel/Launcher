@@ -44,6 +44,12 @@ enum class LockCode(val id: String, val title: String) {
     }
 }
 
+/**
+ * How a code check came out (review, 25 Oct). BUSY = not checked at all: another check is running, the wrong-tries
+ * wait is on, or the screen it was for has gone. Only WRONG is a wrong code (shake, "Wrong PIN", counts as a try).
+ */
+enum class CodeCheck { RIGHT, WRONG, BUSY }
+
 /** A locked app waiting for its code: its name (for the screen), which code opens it, and what to do once it's right. */
 class PendingOpen(val label: String, val code: LockCode, val open: () -> Unit, val packageName: String = "")
 
@@ -98,19 +104,32 @@ class VaultStore private constructor(context: Context) {
     /**
      * How long he still has to wait before the next try (0 = he can try). If the phone's clock was set back to skip the
      * wait (now is before the moment the wait started), the wait starts again from now, in full.
+     * Setting the clock forward doesn't help either (review, 25 Oct): the wait also counts on the time since the phone
+     * started (elapsedRealtime, which no clock setting moves) and the longer of the two wins. After a restart that count
+     * begins at zero again, so then only the wall clock counts.
      * Changes state, so call it from a tap or a coroutine, never straight from drawing.
      */
     fun lockWaitMs(): Long {
         if (lockedUntil == 0L) return 0L
         val now = System.currentTimeMillis()
-        if (now < prefs.getLong(KEY_WAIT_SET_AT, 0L)) startWait(now, waitFor(prefs.getInt(KEY_WAIT_STEP, 1)))
-        else if (now >= lockedUntil) {
+        val setAt = prefs.getLong(KEY_WAIT_SET_AT, 0L)
+        if (now < setAt) {
+            startWait(now, waitFor(prefs.getInt(KEY_WAIT_STEP, 1)))
+            return lockedUntil - now
+        }
+        val byWall = lockedUntil - now
+        val elapsedAt = prefs.getLong(KEY_WAIT_ELAPSED_AT, -1L)
+        val elapsedNow = SystemClock.elapsedRealtime()
+        // A saved count bigger than today's = the phone restarted since (or a wait from before this was kept).
+        val left = if (elapsedAt < 0L || elapsedAt > elapsedNow) byWall
+        else maxOf(byWall, (lockedUntil - setAt) - (elapsedNow - elapsedAt))
+        if (left <= 0L) {
             // The wait is over (the step count stays, so the next wait is longer).
             lockedUntil = 0L
-            prefs.edit { remove(KEY_WAIT_UNTIL); remove(KEY_WAIT_SET_AT) }
+            prefs.edit { remove(KEY_WAIT_UNTIL); remove(KEY_WAIT_SET_AT); remove(KEY_WAIT_ELAPSED_AT) }
             return 0L
         }
-        return (lockedUntil - now).coerceAtLeast(0L)
+        return left
     }
 
     /** The wait for the [step]th time in a row: 30 seconds, 5 minutes, then 1 hour. */
@@ -122,7 +141,11 @@ class VaultStore private constructor(context: Context) {
 
     private fun startWait(now: Long, length: Long) {
         lockedUntil = now + length
-        prefs.edit { putLong(KEY_WAIT_UNTIL, lockedUntil); putLong(KEY_WAIT_SET_AT, now) }
+        prefs.edit {
+            putLong(KEY_WAIT_UNTIL, lockedUntil)
+            putLong(KEY_WAIT_SET_AT, now)
+            putLong(KEY_WAIT_ELAPSED_AT, SystemClock.elapsedRealtime())
+        }
     }
 
     /** A wrong code: the 5th in a row starts the next (longer) wait. */
@@ -141,8 +164,18 @@ class VaultStore private constructor(context: Context) {
     private fun rightCode() {
         wrongTries = 0
         lockedUntil = 0L
-        prefs.edit { remove(KEY_WRONG_TRIES); remove(KEY_WAIT_UNTIL); remove(KEY_WAIT_SET_AT); remove(KEY_WAIT_STEP) }
+        prefs.edit {
+            remove(KEY_WRONG_TRIES); remove(KEY_WAIT_UNTIL); remove(KEY_WAIT_SET_AT); remove(KEY_WAIT_ELAPSED_AT); remove(KEY_WAIT_STEP)
+        }
     }
+
+    /**
+     * Is a check that started with [waitingFor] / [forVault] / [round] still wanted? (Review, 25 Oct: the check now
+     * takes a moment, and meanwhile Seelie may have locked again (Home, screen off), or the code screen closed (Back,
+     * ✕), or another app started waiting. A late right answer must then open nothing.)
+     */
+    private fun stillWanted(waitingFor: PendingOpen?, forVault: Boolean, round: Int): Boolean =
+        lockedAgain == round && (if (waitingFor != null) pending === waitingFor else forVault && vaultAsking)
 
     /** A code is being checked right now (the screen says "Checking…" and ignores more tries meanwhile). */
     var checking by mutableStateOf(false)
@@ -214,8 +247,15 @@ class VaultStore private constructor(context: Context) {
         else pending = PendingOpen(label, codeFor(packageName), action)
     }
 
-    /** The code a guarded app asks for: a locked app its own pick, a vault app the vault's code. */
-    private fun codeFor(packageName: String): LockCode = if (packageName in locked) lockCodeOf(packageName) else vaultCode
+    /**
+     * The code a guarded app asks for: a locked app its own pick, a vault app the vault's code. An app that is in the
+     * vault AND locked with the fun lock takes the vault's code (review, 25 Oct): the fun lock never opens vault apps.
+     */
+    private fun codeFor(packageName: String): LockCode {
+        if (packageName !in locked) return vaultCode
+        val own = lockCodeOf(packageName)
+        return if (own == LockCode.FUN && packageName in apps) vaultCode else own
+    }
 
     /** The code was right: open the waiting app, and lock again straight after. */
     fun finishPending() {
@@ -254,6 +294,7 @@ class VaultStore private constructor(context: Context) {
     fun cancelPending() {
         pending = null
         unlocked = false
+        gameOk = false
     }
 
     fun add(packageName: String) = saveApps(apps + packageName)
@@ -272,10 +313,10 @@ class VaultStore private constructor(context: Context) {
      */
     suspend fun setPin(pin: String, password: Boolean = false, forVault: Boolean = true) {
         val slot = if (password) PASSWORD_SLOT else PIN_SLOT
-        val (salt, hashed) = withContext(Dispatchers.Default) { newSalt().let { it to hash(pin, it, ROUNDS) } }
+        val made = withContext(Dispatchers.Default) { scramble(pin) }
         synchronized(this) {
             prefs.edit {
-                putSlot(slot, salt, hashed)
+                putSlot(slot, made)
                 if (!password) putInt(KEY_LENGTH, pin.length)
                 if (forVault) putBoolean(KEY_MODE, password)
             }
@@ -299,11 +340,17 @@ class VaultStore private constructor(context: Context) {
      * [lockWaitMs]). Runs the slow hash off the main thread (25 Oct, audit S9), so call it from a coroutine; while it
      * runs [checking] is on and a second try is turned away.
      */
-    suspend fun tryCode(pin: String, code: LockCode): Boolean {
-        if (checking || lockWaitMs() > 0) return false
+    suspend fun tryCode(pin: String, code: LockCode): CodeCheck {
+        if (checking || lockWaitMs() > 0) return CodeCheck.BUSY
+        // What this check is for, so a late answer can tell whether it's still wanted (see [stillWanted]).
+        val waitingFor = pending
+        val forVault = vaultAsking
+        val round = lockedAgain
+        if (waitingFor == null && !forVault) return CodeCheck.BUSY
         val password = code == LockCode.PASSWORD
         checking = true
         val ok = try { matches(pin, if (password) PASSWORD_SLOT else PIN_SLOT) } finally { checking = false }
+        if (!stillWanted(waitingFor, forVault, round)) return CodeCheck.BUSY
         if (ok) {
             rightCode()
             // A PIN made before this existed: learn its length now, so next time no OK is needed.
@@ -313,48 +360,79 @@ class VaultStore private constructor(context: Context) {
             }
             unlocked = true
         } else wrongCode()
-        return ok
+        return if (ok) CodeCheck.RIGHT else CodeCheck.WRONG
     }
 
     /*
-     * The slow hash (25 Oct, audit S9): PBKDF2 with 600,000 rounds now (the OWASP advice), was 60,000. Every hash keeps
-     * its own round count next to it, so codes made before still work (no count saved = 60,000). A right code on an old
-     * count is quietly scrambled again at 600,000 with a fresh salt.
+     * The slow hash (25 Oct, audit S9): PBKDF2, which is slow on purpose so guessing codes from a copied file takes
+     * long. Every hash keeps its own round count next to it, so codes made before still work (no count saved = the
+     * old 60,000) and checking always uses exactly the count the hash was made with.
+     *
+     * How many rounds (review, 25 Oct): OWASP advises 600,000, but on a phone's PBKDF2 that can take 2 to 4 seconds,
+     * and the check runs on EVERY locked-app open. So the count is measured on this phone: a short sample hash is
+     * timed and the count picked so one check takes about 400 ms, never under 120,000 and never over 600,000. That is
+     * done when a code is made, and when a right code turns out to be old (60,000, no count saved) or too slow here
+     * (made by the first 600,000 build): it's quietly scrambled again, with a fresh salt, in the background.
      */
 
     /** Where one code's salt, hash and round count live in the prefs. */
     private class Slot(val salt: String, val hash: String, val rounds: String)
 
+    /** One scrambled code, ready to save: its salt, its hash and how many rounds made it. */
+    private class Scrambled(val salt: ByteArray, val hash: ByteArray, val rounds: Int)
+
+    /** Scrambles [code] with a fresh salt and this phone's round count. Slow: background threads only. */
+    private fun scramble(code: String): Scrambled {
+        val rounds = roundsForThisPhone()
+        val salt = newSalt()
+        return Scrambled(salt, hash(code, salt, rounds), rounds)
+    }
+
+    /** Rounds so one check takes about [TARGET_MS] here, from a timed sample hash (background threads only). */
+    private fun roundsForThisPhone(): Int {
+        val salt = ByteArray(16)
+        hash("warm-up", salt, 1_000)   // loads the crypto classes first, so they don't count in the timing
+        val start = SystemClock.elapsedRealtimeNanos()
+        hash("sample", salt, SAMPLE_ROUNDS)
+        val ms = ((SystemClock.elapsedRealtimeNanos() - start) / 1_000_000.0).coerceAtLeast(1.0)
+        val rounds = (SAMPLE_ROUNDS * TARGET_MS / ms).toInt() / 10_000 * 10_000
+        return rounds.coerceIn(MIN_ROUNDS, ROUNDS)
+    }
+
     /** Is [input] this slot's code? The hash runs on a background thread; the compare is constant-time. */
     private suspend fun matches(input: String, slot: Slot): Boolean {
-        val salt = decode(prefs.getString(slot.salt, null))
-        val storedText = prefs.getString(slot.hash, null)
+        // Salt, hash and count read together, so a code being saved meanwhile can't mix old and new.
+        val (storedText, salt, counted) = synchronized(this) {
+            Triple(prefs.getString(slot.hash, null), decode(prefs.getString(slot.salt, null)), prefs.getInt(slot.rounds, -1))
+        }
         val stored = decode(storedText)
         if (stored.isEmpty() || salt.isEmpty()) return false
-        val rounds = prefs.getInt(slot.rounds, OLD_ROUNDS)
+        val rounds = if (counted > 0) counted else OLD_ROUNDS
         // A constant-time compare, so the time it takes doesn't give anything away.
+        val start = SystemClock.elapsedRealtime()
         val ok = withContext(Dispatchers.Default) { MessageDigest.isEqual(hash(input, salt, rounds), stored) }
-        if (ok && rounds < ROUNDS) rehash(input, slot, storedText)
+        val took = SystemClock.elapsedRealtime() - start
+        // (Too slow only counts above the floor: a count can't go lower than that anyway.)
+        if (ok && (counted <= 0 || rounds < MIN_ROUNDS || (took > TOO_SLOW_MS && rounds > MIN_ROUNDS))) rehash(input, slot, storedText)
         return ok
     }
 
-    /** Scrambles a right code again at [ROUNDS] with a fresh salt, in the background (the unlock doesn't wait for it). */
+    /** Scrambles a right code again for this phone, in the background (the unlock doesn't wait for it). */
     private fun rehash(input: String, slot: Slot, oldHash: String?) {
         background.launch {
-            val salt = newSalt()
-            val hashed = hash(input, salt, ROUNDS)
+            val made = scramble(input)
             synchronized(this@VaultStore) {
                 // Changed or removed meanwhile (he made a new code): leave the new one alone.
                 if (prefs.getString(slot.hash, null) != oldHash) return@launch
-                prefs.edit { putSlot(slot, salt, hashed) }
+                prefs.edit { putSlot(slot, made) }
             }
         }
     }
 
-    private fun SharedPreferences.Editor.putSlot(slot: Slot, salt: ByteArray, hashed: ByteArray) {
-        putString(slot.salt, Base64.encodeToString(salt, Base64.NO_WRAP))
-        putString(slot.hash, Base64.encodeToString(hashed, Base64.NO_WRAP))
-        putInt(slot.rounds, ROUNDS)
+    private fun SharedPreferences.Editor.putSlot(slot: Slot, made: Scrambled) {
+        putString(slot.salt, Base64.encodeToString(made.salt, Base64.NO_WRAP))
+        putString(slot.hash, Base64.encodeToString(made.hash, Base64.NO_WRAP))
+        putInt(slot.rounds, made.rounds)
     }
 
     private fun decode(text: String?): ByteArray =
@@ -376,11 +454,11 @@ class VaultStore private constructor(context: Context) {
 
     /** Saves a new fun-lock code (the slow hash runs off the main thread, so call it from a coroutine). */
     suspend fun setGameLock(kind: String, code: String) {
-        val (salt, hashed) = withContext(Dispatchers.Default) { newSalt().let { it to hash(code, it, ROUNDS) } }
+        val made = withContext(Dispatchers.Default) { scramble(code) }
         synchronized(this) {
             prefs.edit {
                 putString(KEY_GAME_KIND, kind)
-                putSlot(GAME_SLOT, salt, hashed)
+                putSlot(GAME_SLOT, made)
             }
         }
         gameKind = kind
@@ -397,15 +475,19 @@ class VaultStore private constructor(context: Context) {
      * Checks a fun-lock code. Right does NOT unlock yet: the game first plays its success animation, then calls
      * [unlockAfterGame] (otherwise the app would jump open mid-sparkle). Off the main thread, like [tryCode].
      */
-    suspend fun tryGame(code: String): Boolean {
-        if (gameKind == null || checking || lockWaitMs() > 0) return false
+    suspend fun tryGame(code: String): CodeCheck {
+        if (gameKind == null || checking || lockWaitMs() > 0) return CodeCheck.BUSY
+        // The fun lock only ever opens a waiting locked app, never the vault (audit S8).
+        val waitingFor = pending ?: return CodeCheck.BUSY
+        val round = lockedAgain
         checking = true
         val ok = try { matches(code, GAME_SLOT) } finally { checking = false }
+        if (!stillWanted(waitingFor, false, round)) return CodeCheck.BUSY
         if (ok) {
             rightCode()
             gameOk = true
         } else wrongCode()
-        return ok
+        return if (ok) CodeCheck.RIGHT else CodeCheck.WRONG
     }
 
     /** Set only by a right [tryGame], so nothing else can open a locked app through [unlockAfterGame]. */
@@ -457,9 +539,16 @@ class VaultStore private constructor(context: Context) {
             .encoded
 
     companion object {
-        /** PBKDF2 rounds for new codes (25 Oct, audit S9), and for codes saved before counts were kept. */
+        /** PBKDF2 rounds (25 Oct, audit S9 + review): measured per phone between these two (see [roundsForThisPhone]). */
         private const val ROUNDS = 600_000
+        private const val MIN_ROUNDS = 120_000
+        /** Codes saved before counts were kept. */
         private const val OLD_ROUNDS = 60_000
+        /** How long one check should take, the sample hash that measures it, and "too slow, scramble it again". */
+        private const val TARGET_MS = 400.0
+        private const val SAMPLE_ROUNDS = 20_000
+        private const val TOO_SLOW_MS = 1_000L
+        private const val KEY_WAIT_ELAPSED_AT = "wait_elapsed_at"
         private const val KEY_HASH_ITER = "pin_hash_iter"
         private const val KEY_PW_HASH_ITER = "pw_hash_iter"
         private const val KEY_GAME_HASH_ITER = "game_hash_iter"

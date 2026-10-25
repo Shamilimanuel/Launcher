@@ -252,6 +252,7 @@ fun SeelieCatchLock(
     // Always 4 catches; the parameter is kept so all the fun locks look the same from outside.
     val need by rememberUpdatedState(if (codeLength > 0) codeLength else 4)
     val setup by rememberUpdatedState(codeLength == 0)
+    val checking by rememberUpdatedState(LocalFunLockChecking.current)
     val field = remember { SeelieField() }
     val firstWrong = remember { wrongTick }
     val firstOk = remember { okTick }
@@ -275,6 +276,8 @@ fun SeelieCatchLock(
             latestOnCode(entry.joinToString(","))
             field.fallback = scope.launch {
                 delay(if (setup) 450L else 1200L)
+                // Still being checked: wait for the answer before starting again (review, 25 Oct).
+                while (checking) delay(50)
                 field.seq = emptyList()
                 field.busy = false
             }

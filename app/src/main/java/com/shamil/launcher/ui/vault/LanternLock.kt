@@ -196,6 +196,7 @@ fun LanternLock(
     val scope = rememberCoroutineScope()
     val latestOnCode by rememberUpdatedState(onCode)
     val latestOnShown by rememberUpdatedState(onSuccessShown)
+    val checking by rememberUpdatedState(LocalFunLockChecking.current)
     val glyphs = remember { lanternGlyphs() }
     val state = remember { LanternState() }
     val firstWrong = remember { wrongTick }
@@ -222,6 +223,8 @@ fun LanternLock(
             latestOnCode(state.rings.joinToString(",") { glyphs[it.chosen()].id })
             state.fallback = scope.launch {
                 delay(if (codeLength > 0) 1200L else 450L)
+                // Still being checked: wait for the answer before starting again (review, 25 Oct).
+                while (checking) delay(50)
                 state.scramble(scope)
                 state.busy = false
             }

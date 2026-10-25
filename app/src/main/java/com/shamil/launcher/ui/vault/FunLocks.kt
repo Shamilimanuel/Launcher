@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,6 +61,12 @@ enum class FunLockKind(val id: String, val title: String, val about: String, val
         fun byId(id: String?): FunLockKind? = entries.firstOrNull { it.id == id }
     }
 }
+
+/**
+ * True while the code a game just handed over is still being checked or saved (review, 25 Oct: that takes a moment
+ * now). The games wait for the answer instead of clearing themselves halfway through "Checking…".
+ */
+val LocalFunLockChecking = compositionLocalOf { false }
 
 /** The game for [kind]; all three talk to the vault the same way (see ElementLock). */
 @Composable
@@ -119,7 +127,7 @@ private fun FunLockMake(vault: VaultStore, kind: FunLockKind, onBack: () -> Unit
     var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     androidx.activity.compose.BackHandler(onBack = onBack)
-    FunLockGame(
+    CompositionLocalProvider(LocalFunLockChecking provides saving) { FunLockGame(
         kind = kind,
         title = if (first == null) "Make your code" else "Once more",
         sub = if (saving) "Saving…" else message ?: if (first == null) kind.about else "Play the same code again, to be sure.",
@@ -140,7 +148,7 @@ private fun FunLockMake(vault: VaultStore, kind: FunLockKind, onBack: () -> Unit
         onSuccessShown = onDone,
         onFinger = null,
         onUsePin = null,
-    )
+    ) }
 }
 
 @Composable

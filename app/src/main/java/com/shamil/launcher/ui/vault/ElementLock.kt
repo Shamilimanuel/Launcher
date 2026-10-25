@@ -220,6 +220,7 @@ fun ElementLock(
     val scope = rememberCoroutineScope()
     val latestOnCode by rememberUpdatedState(onCode)
     val latestOnShown by rememberUpdatedState(onSuccessShown)
+    val checking by rememberUpdatedState(LocalFunLockChecking.current)
     val glyphs = remember { ElementKinds.map { ElementGlyph(it) } }
     val lit = remember { List(ElementKinds.size) { Animatable(0f) } }
     val dim = remember { Animatable(0f) }
@@ -265,6 +266,8 @@ fun ElementLock(
                 latestOnCode(entry.joinToString(","))
                 fx.fallback = scope.launch {
                     delay(if (codeLength > 0) 1200L else 450L)
+                    // Still being checked: wait for the answer before starting again (review, 25 Oct).
+                    while (checking) delay(50)
                     seq = emptyList()
                     busy = false
                 }

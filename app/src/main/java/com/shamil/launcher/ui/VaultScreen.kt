@@ -5,6 +5,9 @@ import com.shamil.launcher.ui.vault.TrailPadLayout
 import com.shamil.launcher.ui.vault.FunLockGame
 import com.shamil.launcher.ui.vault.FunLockKind
 import com.shamil.launcher.ui.vault.FunLockSetup
+import com.shamil.launcher.ui.vault.LocalFunLockChecking
+import com.shamil.launcher.apps.CodeCheck
+import androidx.compose.runtime.CompositionLocalProvider
 import com.shamil.launcher.ui.vault.SeelieDotsPadLayout
 import com.shamil.launcher.ui.vault.PinLookStore
 import com.shamil.launcher.ui.vault.PinLook
@@ -216,6 +219,8 @@ private fun PasswordUnlock(vault: VaultStore, title: String = "Vault") {
     var entry by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     val wait = rememberWaitSeconds(vault)
+    // A wait wipes the old "Wrong password", so it doesn't come back once the wait is over.
+    LaunchedEffect(wait > 0) { if (wait > 0) message = null }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
     LaunchedEffect(Unit) { if (canFinger) askFingerprint(context, vault, title) }
     PasswordLayout(
@@ -236,11 +241,16 @@ private fun PasswordUnlock(vault: VaultStore, title: String = "Vault") {
             val tried = entry
             // Checked in the background (25 Oct, audit S9), so the screen never freezes; "Checking…" meanwhile.
             scope.launch {
-                if (!vault.tryCode(tried, LockCode.PASSWORD)) {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    message = "Wrong password"
-                    entry = ""
-                    for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
+                when (vault.tryCode(tried, LockCode.PASSWORD)) {
+                    CodeCheck.WRONG -> {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        message = if (vault.lockWaitMs() > 0) null else "Wrong password"
+                        entry = ""
+                        for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
+                    }
+                    // Not checked (a wait, or the screen is going): no "wrong", no shake.
+                    CodeCheck.BUSY -> entry = ""
+                    CodeCheck.RIGHT -> {}
                 }
             }
         },
@@ -351,38 +361,42 @@ private fun FunLockUnlock(vault: VaultStore, kind: FunLockKind, title: String, o
     var wrongTick by remember { mutableIntStateOf(0) }
     var okTick by remember { mutableIntStateOf(0) }
     val wait = rememberWaitSeconds(vault)
+    LaunchedEffect(wait > 0) { if (wait > 0) message = null }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
-    FunLockGame(
-        kind = kind,
-        title = title,
-        sub = when {
-            wait > 0 -> waitLine(wait)
-            vault.checking -> "Checking…"
-            else -> message ?: kind.prompt
-        },
-        codeLength = kind.codeLength,
-        wrongTick = wrongTick,
-        okTick = okTick,
-        onCode = { code ->
-            when {
-                vault.checking -> {}   // one check at a time; the game clears itself
-                vault.lockWaitMs() > 0 -> wrongTick++
-                // Checked in the background (25 Oct, audit S9); the game's answer just comes a moment later.
-                else -> scope.launch {
-                    if (vault.tryGame(code)) { message = null; okTick++ }
-                    else {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        message = "Not quite. Try again."
-                        wrongTick++
+    // While the code is checked, the game holds off clearing itself (review, 25 Oct).
+    CompositionLocalProvider(LocalFunLockChecking provides vault.checking) {
+        FunLockGame(
+            kind = kind,
+            title = title,
+            sub = when {
+                wait > 0 -> waitLine(wait)
+                vault.checking -> "Checking…"
+                else -> message ?: kind.prompt
+            },
+            codeLength = kind.codeLength,
+            wrongTick = wrongTick,
+            okTick = okTick,
+            onCode = { code ->
+                // One check at a time. Checked in the background (25 Oct, audit S9); the game's answer comes a moment
+                // later. Not checked at all (a wait, or the screen is going): no "wrong", the game clears itself.
+                if (!vault.checking) scope.launch {
+                    when (vault.tryGame(code)) {
+                        CodeCheck.RIGHT -> { message = null; okTick++ }
+                        CodeCheck.WRONG -> {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            message = if (vault.lockWaitMs() > 0) null else "Not quite. Try again."
+                            wrongTick++
+                        }
+                        CodeCheck.BUSY -> {}
                     }
                 }
-            }
-        },
-        onSuccessShown = { vault.unlockAfterGame() },
-        // The fingerprint doesn't pop up by itself here, so it doesn't cover the game; the button asks for it.
-        onFinger = if (canFinger) ({ askFingerprint(context, vault, title) }) else null,
-        onUsePin = onUsePin,
-    )
+            },
+            onSuccessShown = { vault.unlockAfterGame() },
+            // The fingerprint doesn't pop up by itself here, so it doesn't cover the game; the button asks for it.
+            onFinger = if (canFinger) ({ askFingerprint(context, vault, title) }) else null,
+            onUsePin = onUsePin,
+        )
+    }
 }
 
 /**
@@ -458,6 +472,8 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
     // Goes up on every wrong PIN, in the same moment the entry clears (the Seelie dots scatter on it).
     var wrongTick by remember { mutableIntStateOf(0) }
     val wait = rememberWaitSeconds(vault)
+    // A wait wipes the old "Wrong PIN", so it doesn't come back once the wait is over.
+    LaunchedEffect(wait > 0) { if (wait > 0) message = null }
     val canFinger = vault.fingerprint && fingerprintAvailable(context)
     fun askFinger() = askFingerprint(context, vault, title)
     LaunchedEffect(Unit) { if (canFinger) askFinger() }
@@ -471,13 +487,18 @@ private fun PinPad(vault: VaultStore, title: String = "Vault") {
         val tried = entry
         // Checked in the background (25 Oct, audit S9), so the pad never freezes; the dots stay and it says "Checking…".
         scope.launch {
-            if (!vault.tryCode(tried, LockCode.PIN)) {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                message = "Wrong PIN"
-                entry = ""
-                wrongTick++
-                // A little shake, like a head saying "no".
-                for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
+            when (vault.tryCode(tried, LockCode.PIN)) {
+                CodeCheck.WRONG -> {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    message = if (vault.lockWaitMs() > 0) null else "Wrong PIN"
+                    entry = ""
+                    wrongTick++
+                    // A little shake, like a head saying "no".
+                    for (x in listOf(18f, -14f, 10f, -6f, 0f)) shake.animateTo(x, spring(dampingRatio = 0.4f, stiffness = 2000f))
+                }
+                // Not checked (a wait, or the screen is going): no "wrong", no shake.
+                CodeCheck.BUSY -> entry = ""
+                CodeCheck.RIGHT -> {}
             }
         }
     }
