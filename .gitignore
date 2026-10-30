@@ -14,3 +14,14 @@
 .cxx
 local.properties
 .kotlin
+.idea/
+*.jks
+*.keystore
+*.hprof
+status.md
+TASK.md
+CLAUDE.md
+update_progress.py
+__pycache__/
+*.pyc
+*.lnk
