@@ -23,7 +23,7 @@ import com.shamil.launcher.ui.theme.LookStore
 /*
  * Seelie's night screen (25 Oct). A screen saver ("dream" in Android's words): the phone shows it by itself while
  * charging, once he picks Seelie under Settings → Display → Screen saver. The first test answered the big questions on
- * his S24 Ultra (Samsung lists it, it turns sideways with auto-rotate, swipes don't wake the phone, ✕ closes it); this
+ * the test phone (Samsung lists it, it turns sideways with auto-rotate, swipes don't wake the phone, ✕ closes it); this
  * is the full version: his pages (NightPages.kt), skies (NightSky.kt), cream cards (NightCards.kt), all chosen in
  * Clock & date → Night screen (NightScreenSettings.kt).
  * Interactive: a touch does NOT close it (so the pages can swipe and the music buttons work). The ✕ or Back does.

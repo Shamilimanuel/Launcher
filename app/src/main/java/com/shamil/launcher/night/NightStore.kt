@@ -15,7 +15,7 @@ import com.shamil.launcher.ui.theme.WallpaperStore
 import java.io.File
 
 /*
- * The night screen's choices (25 Oct, the full version of the screen saver he tested on his S24 Ultra).
+ * The night screen's choices (25 Oct, the full version of the screen saver he tested on a phone).
  * Same pattern as the other stores: Compose state, ONE store for the whole app, saved on the phone in its own settings
  * file "night_screen" (so a saved look carries the night screen too, see Saves.kt). The ids are saved names: never
  * rename them.

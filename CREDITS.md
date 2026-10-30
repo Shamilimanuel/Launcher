@@ -1,6 +1,6 @@
 # Credits
 
-The Seelie launcher ships with 28 wallpapers (in `app/src/main/assets/wallpapers/`, with small copies in `thumbs/`). The list below is generated from `app/src/main/assets/wallpapers/catalog.json`, which is also what the app shows on its Wallpaper credits page.
+The Seelie launcher ships with 30 wallpapers (in `app/src/main/assets/wallpapers/`, with small copies in `thumbs/`). The list below is generated from `app/src/main/assets/wallpapers/catalog.json`, which is also what the app shows on its Wallpaper credits page.
 
 **Images marked CC BY 4.0 are used under the Creative Commons Attribution 4.0 licence (https://creativecommons.org/licenses/by/4.0/). The credit lines below must stay visible.** They were cropped to a phone shape (the Webb and Hubble images without colour changes). The licence holders do not endorse this project.
 

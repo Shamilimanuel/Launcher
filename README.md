@@ -14,7 +14,7 @@ These pictures come from the **design prototype** (an HTML mock-up with made-up 
 
 - Home screen styles (poster, wheel and more), clock faces, a glance line with weather and your next calendar event, and a widget stack.
 - A-Z app list with a letter rail in several shapes (arc, fan, glider, lantern, wheel, constellation), favourites, icon packs and per-app tweaks.
-- Live backgrounds drawn in code (sprites and a shader) plus 28 licence-checked wallpapers, credited in [CREDITS.md](CREDITS.md).
+- Live backgrounds drawn in code (sprites and a shader) plus 30 licence-checked wallpapers, credited in [CREDITS.md](CREDITS.md).
 - Search for apps and contacts, with a calculator, quick notes and commands such as `> timer 5m` and `> alarm 7:30`.
 - A night screen (also usable as Android's screen saver) and a music card with now-playing controls.
 - PIN vault: hide apps behind a PIN or fingerprint, and lock apps everywhere. It hides apps inside Seelie only; it is not a safe for data.

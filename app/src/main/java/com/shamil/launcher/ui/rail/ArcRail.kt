@@ -50,7 +50,7 @@ import kotlin.random.Random
 
 /*
  * "Guide on the arc", Seelie's own A–Z (his #1 pick, 24 Oct). The letters sit on a quarter circle around the
- * bottom-right corner, where a thumb naturally sweeps (the big S24 Ultra can't reach the top of an edge rail),
+ * bottom-right corner, where a thumb naturally sweeps (a large phone can't reach the top of an edge rail),
  * and a seelie guide rides along the curve under your thumb, lighting the letters it passes and leaving a gold
  * light trail: the app icon in motion. At rest only a faint curve and the resting spirit show.
  *
